@@ -1,0 +1,37 @@
+{
+  "_comment": [
+    "TEMPLATE — copy to app/android/app/google-services.json and fill with YOUR",
+    "own Firebase project's values (Firebase console > Project settings > Your apps",
+    "> Android > google-services.json). You need your own project because push",
+    "notifications are sent from a service account you control.",
+    "The api_key below is a Firebase Android client key: it ships inside every APK",
+    "and is not a secret, but you should still restrict it in Google Cloud Console",
+    "(APIs & Services > Credentials > Android restriction: package name + SHA-1)."
+  ],
+  "project_info": {
+    "project_number": "YOUR_PROJECT_NUMBER",
+    "project_id": "your-firebase-project-id",
+    "storage_bucket": "your-firebase-project-id.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:YOUR_PROJECT_NUMBER:android:YOUR_APP_HASH",
+        "android_client_info": {
+          "package_name": "dz.radbalek.rad_balek"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "YOUR_ANDROID_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

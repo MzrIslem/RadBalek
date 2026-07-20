@@ -1,0 +1,1484 @@
+<?xml version="1.0" ?>
+<?xml-stylesheet type="text/xsl" href="cap-atom-viewer.xsl"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:cap="urn:oasis:names:tc:emergency:cap:1.2">
+  <id>urn:oid:2.49.0.1.12.0</id>
+  <title>Weather Alerts by National Meteorological Office - Algeria</title>
+  <link rel="self" type="application/atom+xml" href="https://ametvigilance.meteo.dz/rss/rss_meteo_dz.xml"/>
+  <updated>2026-07-18T10:44:22Z</updated>
+  <author>
+    <name>National Meteorological Office - Algeria</name>
+  </author>
+  <rights>Copyright, National Meteorological Office. Licensed under CC BY 4.0.</rights>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.725802</id>
+    <title>Heat Wave Severe warning for the wilaya: ALGER</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.725802.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>ALGER</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.742127</id>
+    <title>Heat Wave Severe warning for the wilaya: SIDI-BEL-ABBÈS</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.742127.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>SIDI-BEL-ABBÈS</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.750710</id>
+    <title>Heat Wave Severe warning for the wilaya: SOUK-AHRAS</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.750710.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>SOUK-AHRAS</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.756862</id>
+    <title>Thunderstorm Moderate warning for the wilaya: SOUK-AHRAS</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.756862.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Moderate</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T15:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T21:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>SOUK-AHRAS</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.762210</id>
+    <title>Heat Wave Severe warning for the wilaya: OUARGLA</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.762210.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>OUARGLA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.767641</id>
+    <title>Heat Wave Severe warning for the wilaya: TIPAZA</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.767641.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>TIPAZA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.777000</id>
+    <title>Heat Wave Severe warning for the wilaya: EL-OUED</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.777000.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>EL-OUED</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.788674</id>
+    <title>Heat Wave Severe warning for the wilaya: TISSEMSILT</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.788674.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>TISSEMSILT</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.795446</id>
+    <title>Heat Wave Severe warning for the wilaya: BORDJ-BOU-ARRERIDJ</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.795446.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>BORDJ-BOU-ARRERIDJ</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.801090</id>
+    <title>Thunderstorm Moderate warning for the wilaya: BORDJ-BOU-ARRERIDJ</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.801090.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Moderate</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T15:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T21:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>BORDJ-BOU-ARRERIDJ</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.809105</id>
+    <title>Heat Wave Extreme warning for the wilaya: RELIZANE</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.809105.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Extreme</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T09:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T18:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>RELIZANE</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.815452</id>
+    <title>Heat Wave Severe warning for the wilaya: RELIZANE</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.815452.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T18:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>RELIZANE</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.821723</id>
+    <title>Heat Wave Severe warning for the wilaya: BÉJAÏA</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.821723.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>BÉJAÏA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.827681</id>
+    <title>Heat Wave Severe warning for the wilaya: TOUGGOURT</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.827681.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>TOUGGOURT</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.834311</id>
+    <title>Heat Wave Severe warning for the wilaya: MSILA</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.834311.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>MSILA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.841243</id>
+    <title>Thunderstorm Moderate warning for the wilaya: BORDJ-BADJI-MOKHTAR</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.841243.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Moderate</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T15:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T21:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>BORDJ-BADJI-MOKHTAR</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.847914</id>
+    <title>Heat Wave Severe warning for the wilaya: TIARET</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.847914.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>TIARET</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.854210</id>
+    <title>Heat Wave Severe warning for the wilaya: MILA</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.854210.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>MILA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.860242</id>
+    <title>Thunderstorm Moderate warning for the wilaya: MILA</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.860242.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Moderate</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T15:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T21:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>MILA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.867722</id>
+    <title>Heat Wave Severe warning for the wilaya: OUM-EL-BOUAGHI</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.867722.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>OUM-EL-BOUAGHI</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.873986</id>
+    <title>Thunderstorm Moderate warning for the wilaya: OUM-EL-BOUAGHI</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.873986.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Moderate</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T15:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T21:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>OUM-EL-BOUAGHI</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.881127</id>
+    <title>Heat Wave Severe warning for the wilaya: TÉBESSA</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.881127.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>TÉBESSA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.888515</id>
+    <title>Thunderstorm Moderate warning for the wilaya: TÉBESSA</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.888515.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Moderate</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T15:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T21:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>TÉBESSA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.898961</id>
+    <title>Heat Wave Extreme warning for the wilaya: GUELMA</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.898961.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Extreme</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T09:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T18:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>GUELMA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.905675</id>
+    <title>Heat Wave Severe warning for the wilaya: GUELMA</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.905675.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T18:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>GUELMA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.912370</id>
+    <title>Thunderstorm Moderate warning for the wilaya: GUELMA</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.912370.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Moderate</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T15:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T21:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>GUELMA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.919611</id>
+    <title>Strong Wind Moderate warning for the wilaya: IN-SALAH</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.919611.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Moderate</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T09:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T21:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>IN-SALAH</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.928082</id>
+    <title>Sandstorm Moderate warning for the wilaya: IN-SALAH</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.928082.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Moderate</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T09:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T21:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>IN-SALAH</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.935332</id>
+    <title>Heat Wave Severe warning for the wilaya: TIZI-OUZOU</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.935332.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>TIZI-OUZOU</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.945033</id>
+    <title>Heat Wave Extreme warning for the wilaya: CHLEF</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.945033.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Extreme</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T09:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T18:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>CHLEF</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.952497</id>
+    <title>Heat Wave Severe warning for the wilaya: CHLEF</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.952497.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T18:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>CHLEF</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.961026</id>
+    <title>Heat Wave Severe warning for the wilaya: BATNA</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.961026.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>BATNA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.970269</id>
+    <title>Thunderstorm Moderate warning for the wilaya: BATNA</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.970269.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Moderate</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T15:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T21:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>BATNA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.978757</id>
+    <title>Heat Wave Severe warning for the wilaya: MOSTAGANEM</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.978757.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>MOSTAGANEM</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.987384</id>
+    <title>Heat Wave Extreme warning for the wilaya: ANNABA</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.987384.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Extreme</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T09:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T18:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>ANNABA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.21.994280</id>
+    <title>Heat Wave Severe warning for the wilaya: ANNABA</title>
+    <published>2026-07-18T10:44:21Z</published>
+    <updated>2026-07-18T10:44:21Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.21.994280.xml"/>
+    <cap:sent>2026-07-18T10:44:21Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:21Z</cap:effective>
+    <cap:onset>2026-07-18T18:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>ANNABA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.2684</id>
+    <title>Heat Wave Severe warning for the wilaya: SÉTIF</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.2684.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>SÉTIF</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.11918</id>
+    <title>Thunderstorm Moderate warning for the wilaya: SÉTIF</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.11918.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Moderate</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T15:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T21:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>SÉTIF</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.20126</id>
+    <title>Heat Wave Severe warning for the wilaya: AÏN-TÉMOUCHENT</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.20126.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>AÏN-TÉMOUCHENT</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.40200</id>
+    <title>Heat Wave Severe warning for the wilaya: DJELFA</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.40200.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>DJELFA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.51267</id>
+    <title>Heat Wave Severe warning for the wilaya: TLEMCEN</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.51267.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>TLEMCEN</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.59830</id>
+    <title>Heat Wave Severe warning for the wilaya: CONSTANTINE</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.59830.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>CONSTANTINE</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.68037</id>
+    <title>Thunderstorm Moderate warning for the wilaya: CONSTANTINE</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.68037.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Moderate</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T15:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T21:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>CONSTANTINE</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.78368</id>
+    <title>Heat Wave Extreme warning for the wilaya: SKIKDA</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.78368.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Extreme</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T09:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T18:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>SKIKDA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.87697</id>
+    <title>Heat Wave Severe warning for the wilaya: SKIKDA</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.87697.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T18:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>SKIKDA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.96838</id>
+    <title>Heat Wave Severe warning for the wilaya: EL-MGHAIR</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.96838.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>EL-MGHAIR</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.105417</id>
+    <title>Heat Wave Severe warning for the wilaya: JIJEL</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.105417.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>JIJEL</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.114787</id>
+    <title>Heat Wave Severe warning for the wilaya: KHENCHELA</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.114787.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>KHENCHELA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.124543</id>
+    <title>Thunderstorm Moderate warning for the wilaya: KHENCHELA</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.124543.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Moderate</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T15:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T21:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>KHENCHELA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.135774</id>
+    <title>Heat Wave Extreme warning for the wilaya: AÏN-DEFLA</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.135774.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Extreme</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T09:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T18:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>AÏN-DEFLA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.146011</id>
+    <title>Heat Wave Severe warning for the wilaya: AÏN-DEFLA</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.146011.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T18:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>AÏN-DEFLA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.156514</id>
+    <title>Heat Wave Severe warning for the wilaya: MÉDÉA</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.156514.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>MÉDÉA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.167264</id>
+    <title>Heat Wave Severe warning for the wilaya: BISKRA</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.167264.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>BISKRA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.178789</id>
+    <title>Heat Wave Extreme warning for the wilaya: EL-TARF</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.178789.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Extreme</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T09:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T18:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>EL-TARF</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.188189</id>
+    <title>Heat Wave Severe warning for the wilaya: EL-TARF</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.188189.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T18:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>EL-TARF</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.197933</id>
+    <title>Strong Wind Moderate warning for the wilaya: ADRAR</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.197933.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Moderate</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T09:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T21:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>ADRAR</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.208657</id>
+    <title>Sandstorm Moderate warning for the wilaya: ADRAR</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.208657.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Moderate</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T09:00:00Z</cap:onset>
+    <cap:expires>2026-07-18T21:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>ADRAR</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.219211</id>
+    <title>Heat Wave Severe warning for the wilaya: SAÏDA</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.219211.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>SAÏDA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.229497</id>
+    <title>Heat Wave Severe warning for the wilaya: BOUMERDÈS</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.229497.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>BOUMERDÈS</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.239978</id>
+    <title>Heat Wave Severe warning for the wilaya: BOUIRA</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.239978.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>BOUIRA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.250850</id>
+    <title>Heat Wave Severe warning for the wilaya: MASCARA</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.250850.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>MASCARA</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.261570</id>
+    <title>Heat Wave Severe warning for the wilaya: OULED-DJELLAL</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.261570.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>OULED-DJELLAL</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.272989</id>
+    <title>Heat Wave Severe warning for the wilaya: ORAN</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.272989.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>ORAN</cap:areaDesc>
+    </cap:area>
+  </entry>
+  <entry>
+    <id>urn:oid:2.49.0.1.12.0.2026.7.18.10.44.22.284466</id>
+    <title>Heat Wave Severe warning for the wilaya: BLIDA</title>
+    <published>2026-07-18T10:44:22Z</published>
+    <updated>2026-07-18T10:44:22Z</updated>
+    <author>
+      <name>National Meteorological Office - Algeria</name>
+    </author>
+    <link type="application/cap+xml" href="https://ametvigilance.meteo.dz/CAPs/2026.7.18.10.44.22.284466.xml"/>
+    <cap:sent>2026-07-18T10:44:22Z</cap:sent>
+    <cap:status>Actual</cap:status>
+    <cap:msgType>Alert</cap:msgType>
+    <cap:scope>Public</cap:scope>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-18T10:44:22Z</cap:effective>
+    <cap:onset>2026-07-18T06:00:00Z</cap:onset>
+    <cap:expires>2026-07-19T06:00:00Z</cap:expires>
+    <cap:area>
+      <cap:areaDesc>BLIDA</cap:areaDesc>
+    </cap:area>
+  </entry>
+</feed>

@@ -1,0 +1,32 @@
+# credentials — never commit
+CF api token.txt
+github api token.txt
+gemini ai studio.txt
+*token*.txt
+cf-env.ps1
+firebase-sa.json
+*-sa.json
+devtoken.txt
+gemini.key
+*firebase-adminsdk*.json
+*.token
+*.secret
+
+ingest/.dev.vars
+ingest/out/
+node_modules/
+
+radbalek-release.jks
+key.properties
+
+# Firebase client config — carries YOUR project's Android API key. Not secret
+# (it ships inside every APK) but contributors must use their own Firebase
+# project, so it is not committed. See google-services.json.example.
+google-services.json
+
+# Flutter / Android build output
+app/build/
+app/.dart_tool/
+app/.gradle/
+build/
+.dart_tool/

@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="fr" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rad Balek رد بالك — Alerte précoce Algérie</title>
+<style>
+  :root{
+    --primary:#006A60; --on-primary:#FFFFFF; --primary-container:#9EF2E4; --on-primary-container:#00201C;
+    --surface:#F5FAF8; --surface-1:#EFF5F2; --surface-2:#E9EFEC; --surface-3:#E2E9E6;
+    --on-surface:#171D1B; --on-surface-var:#3F4946; --outline:#6F7976; --outline-var:#C8D2CE;
+    --red:#BA1A1A; --red-c:#FFDAD6; --on-red-c:#73100E;
+    --orange:#964900; --orange-c:#FFDCC2; --on-orange-c:#5C2A00;
+    --yellow:#6D5E00; --yellow-c:#F0E395; --on-yellow-c:#494000;
+    --green:#1D6E37; --green-c:#C9EFCF; --on-green-c:#0E4523;
+    --scrim:rgba(0,0,0,.45); --shadow:0 1px 3px rgba(0,0,0,.10);
+  }
+  [data-theme="dark"]{
+    --primary:#83D5C6; --on-primary:#003731; --primary-container:#005048; --on-primary-container:#9EF2E4;
+    --surface:#0E1513; --surface-1:#161D1B; --surface-2:#1B2220; --surface-3:#232A28;
+    --on-surface:#DDE4E1; --on-surface-var:#BEC9C5; --outline:#89938F; --outline-var:#3F4946;
+    --red:#FFB4AB; --red-c:#7B1712; --on-red-c:#FFDAD6;
+    --orange:#FFB77C; --orange-c:#6B3200; --on-orange-c:#FFDCC2;
+    --yellow:#DCC94B; --yellow-c:#524800; --on-yellow-c:#F0E395;
+    --green:#8FD69B; --green-c:#1D5430; --on-green-c:#C9EFCF;
+    --scrim:rgba(0,0,0,.6); --shadow:0 1px 3px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html{scroll-behavior:smooth}
+  body{font-family:"Segoe UI Variable Text","Segoe UI",Roboto,"Noto Sans","Noto Naskh Arabic",system-ui,sans-serif;
+    background:var(--surface);color:var(--on-surface);line-height:1.5;transition:background .25s,color .25s}
+  .app{max-width:430px;margin:0 auto;min-height:100vh;padding-bottom:96px}
+  .appbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;
+    padding:14px 16px 10px;background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(12px)}
+  .logo{width:40px;height:40px;border-radius:14px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center;flex:none}
+  .appbar h1{font-size:19px;font-weight:600;letter-spacing:.2px;white-space:nowrap}
+  .appbar .sub{font-size:11.5px;color:var(--on-surface-var);margin-top:-2px;white-space:nowrap}
+  .live{display:inline-flex;align-items:center;gap:4px}
+  .live .d{width:7px;height:7px;border-radius:99px;background:var(--green);animation:pulse 2s infinite}
+  .grow{flex:1}
+  .seg{display:flex;background:var(--surface-2);border-radius:999px;padding:3px;gap:2px}
+  .seg button{border:0;background:transparent;color:var(--on-surface-var);font:inherit;font-size:12px;padding:5px 10px;border-radius:999px;cursor:pointer;transition:all .2s}
+  .seg button.on{background:var(--primary);color:var(--on-primary);font-weight:600}
+  .iconbtn{border:0;background:var(--surface-2);width:38px;height:38px;border-radius:999px;cursor:pointer;display:grid;place-items:center;color:var(--on-surface-var);flex:none;transition:transform .15s}
+  .iconbtn:active{transform:scale(.92)}
+  main{padding:4px 16px 0;display:block}
+  main.hidden{display:none}
+  .hero{border-radius:28px;padding:22px;margin-top:6px;background:var(--red-c);color:var(--on-red-c);box-shadow:var(--shadow);animation:pop .4s ease}
+  @keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .hero .k{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;opacity:.8}
+  .hero .lvl{display:flex;align-items:center;gap:12px;margin:8px 0 4px}
+  .hero .dot{width:16px;height:16px;border-radius:6px;background:var(--red);flex:none;animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.25);opacity:.75}}
+  .hero h2{font-size:clamp(24px,2.4vw + 14px,32px);font-weight:700;line-height:1.2}
+  .hero p{font-size:13.5px;margin-top:6px;opacity:.9}
+  .kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:14px}
+  .kpi{border-radius:24px;padding:16px 18px;min-height:112px;display:flex;flex-direction:column;justify-content:space-between;
+    cursor:pointer;transition:transform .15s;animation:pop .4s ease both;border:1px solid transparent}
+  .kpi:active{transform:scale(.97)}
+  .kpi .top{display:flex;align-items:center;justify-content:space-between}
+  .kpi .n{font-size:36px;font-weight:700;line-height:1;letter-spacing:-1px}
+  .kpi .l{font-size:12.5px;font-weight:600;margin-top:6px;opacity:.9}
+  .kpi.red{background:var(--red-c);color:var(--on-red-c)}
+  .kpi.orange{background:var(--orange-c);color:var(--on-orange-c)}
+  .kpi.fire{background:var(--surface-1);color:var(--on-surface);border-color:var(--outline-var)}
+  .kpi.rep{background:var(--primary-container);color:var(--on-primary-container)}
+  h3.sect{font-size:14px;font-weight:700;margin:22px 4px 10px;display:flex;align-items:center;gap:8px}
+  h3.sect .badge{font-size:10.5px;font-weight:700;letter-spacing:.6px;padding:3px 8px;border-radius:6px;background:var(--primary-container);color:var(--on-primary-container);text-transform:uppercase}
+  h3.sect .badge.unofficial{background:var(--surface-3);color:var(--on-surface-var)}
+  .card{background:var(--surface-1);border-radius:20px;padding:14px;display:flex;gap:12px;align-items:center;margin-bottom:10px;cursor:pointer;border:1px solid transparent;transition:transform .15s,background .2s;animation:pop .35s ease both}
+  .card:hover{background:var(--surface-2)}
+  .card:active{transform:scale(.98)}
+  .lead{width:46px;height:46px;border-radius:16px;display:grid;place-items:center;flex:none}
+  .lead.red{background:var(--red-c);color:var(--on-red-c)}
+  .lead.orange{background:var(--orange-c);color:var(--on-orange-c)}
+  .lead.yellow{background:var(--yellow-c);color:var(--on-yellow-c)}
+  .lead.muted{background:var(--surface-3);color:var(--on-surface-var)}
+  .card .tx{flex:1;min-width:0}
+  .card .t1{font-size:14.5px;font-weight:600;line-height:1.3}
+  .card .t2{font-size:12.5px;color:var(--on-surface-var);margin-top:2px}
+  .stat{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;border:1.5px solid;flex:none}
+  .st-ongoing{color:var(--red);border-color:var(--red)}
+  .st-contained{color:var(--orange);border-color:var(--orange)}
+  .st-out{color:var(--green);border-color:var(--green)}
+  .st-ok{color:var(--green);border-color:var(--green)}
+  .chev{color:var(--outline);flex:none}
+  .mywilaya{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:none}
+  .wcard{flex:none;min-width:150px;border-radius:20px;padding:14px;background:var(--surface-1);border:1px solid var(--outline-var)}
+  .wcard .wn{font-size:14px;font-weight:700}
+  .wcard .ws{font-size:12px;margin-top:6px;display:flex;align-items:center;gap:6px;color:var(--on-surface-var)}
+  .wcard .ws .d{width:10px;height:10px;border-radius:4px;flex:none}
+  .statgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+  .scard{background:var(--surface-1);border-radius:16px;padding:12px;display:flex;align-items:center;gap:10px}
+  .scard .ic{width:34px;height:34px;border-radius:12px;background:var(--surface-3);color:var(--on-surface-var);display:grid;place-items:center;flex:none}
+  .scard .n{font-size:17px;font-weight:700;line-height:1.1}
+  .scard .l{font-size:11px;color:var(--on-surface-var)}
+  .foot{font-size:11.5px;color:var(--on-surface-var);text-align:center;padding:26px 24px 10px;line-height:1.6}
+  /* map view */
+  .mapcard{background:var(--surface-1);border-radius:24px;padding:12px;margin-top:6px;animation:pop .4s ease}
+  .mapcard svg{width:100%;height:auto;display:block;border-radius:16px}
+  .wpath{cursor:pointer;transition:opacity .15s}
+  .wpath:hover{opacity:.82}
+  .wpath.sel{stroke:var(--on-surface);stroke-width:2}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;padding:12px 6px 4px;font-size:11.5px;color:var(--on-surface-var)}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend .sw{width:12px;height:12px;border-radius:4px;flex:none}
+  .mapnote{font-size:11px;color:var(--on-surface-var);padding:6px 8px 0;line-height:1.5}
+  /* settings */
+  .setcard{background:var(--surface-1);border-radius:20px;padding:16px;margin-bottom:12px;animation:pop .35s ease both}
+  .setcard h4{font-size:13.5px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .wchips{display:flex;flex-wrap:wrap;gap:7px}
+  .wchip{border:1px solid var(--outline-var);background:transparent;color:var(--on-surface-var);font:inherit;font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:999px;cursor:pointer;transition:all .15s}
+  .wchip.on{background:var(--primary);color:var(--on-primary);border-color:transparent}
+  .togrow{display:flex;align-items:center;justify-content:space-between;padding:9px 2px;font-size:13.5px}
+  .tog{width:46px;height:26px;border-radius:999px;background:var(--surface-3);border:1px solid var(--outline-var);position:relative;cursor:pointer;transition:background .2s;flex:none}
+  .tog::after{content:"";position:absolute;top:2px;inset-inline-start:2px;width:20px;height:20px;border-radius:99px;background:var(--surface);transition:transform .2s;box-shadow:var(--shadow)}
+  .tog.on{background:var(--primary);border-color:transparent}
+  .tog.on::after{transform:translateX(20px)}
+  [dir="rtl"] .tog.on::after{transform:translateX(-20px)}
+  .emgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+  .emcard{display:flex;align-items:center;gap:10px;background:var(--surface-2);border-radius:14px;padding:12px;text-decoration:none;color:var(--on-surface)}
+  .emcard .num{font-size:19px;font-weight:700;color:var(--primary)}
+  .emcard .lbl{font-size:11px;color:var(--on-surface-var)}
+  .catgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 14px}
+  .catbtn{border:1px solid var(--outline-var);background:var(--surface-1);border-radius:14px;padding:10px 6px;display:flex;flex-direction:column;align-items:center;gap:6px;font:inherit;font-size:11.5px;font-weight:600;color:var(--on-surface-var);cursor:pointer;transition:all .15s}
+  .catbtn.on{background:var(--primary-container);color:var(--on-primary-container);border-color:transparent}
+  .repfield{width:100%;font:inherit;font-size:13.5px;background:var(--surface-1);border:1px solid var(--outline-var);border-radius:12px;padding:10px 12px;color:var(--on-surface);margin-top:6px}
+  textarea.repfield{resize:vertical;min-height:64px}
+  .conf{border:1px solid var(--outline-var);background:transparent;color:var(--on-surface-var);font:inherit;font-size:11px;font-weight:700;border-radius:999px;padding:4px 10px;cursor:pointer;flex:none;transition:all .15s}
+  .conf.done{background:var(--green-c);color:var(--on-green-c);border-color:transparent}
+  .nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,430px);z-index:30;display:flex;
+    background:color-mix(in srgb,var(--surface-2) 92%,transparent);backdrop-filter:blur(14px);
+    padding:8px 8px calc(10px + env(safe-area-inset-bottom));border-radius:24px 24px 0 0}
+  .nav button{flex:1;border:0;background:transparent;font:inherit;color:var(--on-surface-var);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;padding:4px 0}
+  .nav .ico{width:56px;height:30px;border-radius:999px;display:grid;place-items:center;transition:background .2s}
+  .nav button.on{color:var(--on-surface)}
+  .nav button.on .ico{background:var(--primary-container);color:var(--on-primary-container)}
+  .scrim{position:fixed;inset:0;background:var(--scrim);z-index:40;opacity:0;pointer-events:none;transition:opacity .25s}
+  .scrim.open{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;bottom:0;left:50%;transform:translate(-50%,105%);width:min(100%,430px);z-index:50;background:var(--surface);
+    border-radius:28px 28px 0 0;max-height:86vh;overflow-y:auto;transition:transform .3s cubic-bezier(.2,.9,.3,1),opacity .3s;box-shadow:0 -4px 30px rgba(0,0,0,.25)}
+  .sheet.open{transform:translate(-50%,0)}
+  .sheet .grab{width:36px;height:4px;border-radius:2px;background:var(--outline-var);margin:10px auto 0}
+  .band{padding:18px 22px 16px}
+  .band.red{background:var(--red-c);color:var(--on-red-c)}
+  .band.orange{background:var(--orange-c);color:var(--on-orange-c)}
+  .band.yellow{background:var(--yellow-c);color:var(--on-yellow-c)}
+  .band .ev{font-size:22px;font-weight:700;display:flex;align-items:center;gap:10px}
+  .band .src{font-size:12px;margin-top:4px;opacity:.85}
+  .sheet .body{padding:16px 22px 26px}
+  .row5{display:flex;gap:12px;margin-bottom:14px}
+  .row5 .ic{width:38px;height:38px;border-radius:12px;background:var(--surface-2);display:grid;place-items:center;flex:none;color:var(--on-surface-var)}
+  .row5 .k{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--on-surface-var)}
+  .row5 .v{font-size:14px;margin-top:1px}
+  .row5 ul{margin:4px 0 0 18px;font-size:14px}
+  [dir="rtl"] .row5 ul{margin:4px 18px 0 0}
+  .row5 li{margin-bottom:4px}
+  .actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+  .btn{border:0;font:inherit;font-weight:600;font-size:13.5px;padding:12px 18px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:transform .15s;text-decoration:none}
+  .btn:active{transform:scale(.95)}
+  .btn.fill{background:var(--primary);color:var(--on-primary)}
+  .btn.tonal{background:var(--surface-2);color:var(--on-surface)}
+  .btn.danger{background:var(--red-c);color:var(--on-red-c)}
+  svg{display:block}
+
+  @media (min-width:700px){
+    .app{max-width:none;padding-bottom:24px;padding-inline-start:88px}
+    .appbar{padding:16px 24px 12px}
+    main{padding:4px 24px 0}
+    #view-home{display:grid;gap:0 22px;align-items:start;grid-template-columns:minmax(0,1fr) minmax(300px,380px);
+      grid-template-areas:"hero hero" "kpis kpis" "official incidents" "official side"}
+    #view-home.hidden{display:none}
+    #heroSec{grid-area:hero}
+    #kpiSec{grid-area:kpis}
+    #officialSec{grid-area:official}
+    #incidentSec{grid-area:incidents}
+    #sideSec{grid-area:side}
+    .kpis{grid-template-columns:repeat(4,1fr)}
+    .kpi .n{font-size:42px}
+    #view-map{display:grid;gap:0 22px;align-items:start;grid-template-columns:minmax(0,1.25fr) minmax(300px,420px);grid-template-areas:"map info"}
+    #view-map.hidden{display:none}
+    #mapSec{grid-area:map}
+    #mapInfoSec{grid-area:info}
+    #view-settings{max-width:720px}
+    .nav{left:0;top:0;bottom:0;transform:none;width:88px;flex-direction:column;justify-content:flex-start;gap:10px;
+      padding:88px 8px 16px;border-radius:0;inset-inline-start:0;border-inline-end:1px solid var(--outline-var)}
+    [dir="rtl"] .nav{left:auto;right:0}
+    [dir="rtl"] .app{padding-inline-start:88px}
+    .nav button{flex:none}
+    .sheet{bottom:auto;top:50%;left:50%;width:min(520px,92vw);max-height:80vh;border-radius:28px;transform:translate(-50%,-46%) scale(.96);opacity:0;pointer-events:none}
+    .sheet.open{transform:translate(-50%,-50%) scale(1);opacity:1;pointer-events:auto}
+    .hero{margin-top:10px}
+  }
+  @media (min-width:1140px){
+    #view-home{grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr) 340px;
+      grid-template-areas:"hero hero side" "kpis kpis side" "official incidents side"}
+    .hero{padding:28px}
+  }
+  @media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="appbar">
+    <div class="logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><path d="M8 12.5c1.3-1.6 2.6-1.6 4 0s2.7 1.6 4 0"/>
+      </svg>
+    </div>
+    <div>
+      <h1><span data-i18n="app">Rad Balek</span></h1>
+      <div class="sub"><span data-i18n="tagline">Alerte précoce · Algérie</span> · <span class="live"><span class="d"></span><span id="liveLbl">…</span></span></div>
+    </div>
+    <div class="grow"></div>
+    <div class="seg" id="langSeg">
+      <button data-lang="fr" class="on">FR</button><button data-lang="ar">ع</button><button data-lang="en">EN</button>
+    </div>
+    <button class="iconbtn" id="themeBtn" aria-label="theme">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
+    </button>
+  </header>
+
+  <main id="view-home">
+    <section id="heroSec">
+      <div class="hero" id="hero"></div>
+      <h3 class="sect"><span data-i18n="mywilayas">Mes wilayas</span></h3>
+      <div class="mywilaya" id="myWilayas"></div>
+    </section>
+    <section id="kpiSec"><div class="kpis" id="kpis"></div></section>
+    <section id="officialSec">
+      <h3 class="sect"><span data-i18n="official">Alertes officielles</span> <span class="badge">ONM</span></h3>
+      <div id="alertList"></div>
+    </section>
+    <section id="incidentSec">
+      <h3 class="sect"><span data-i18n="observed">Incidents observés</span> <span class="badge unofficial" data-i18n="unofficial">non officiel</span></h3>
+      <div id="incidentList"></div>
+      <h3 class="sect"><span data-i18n="community">Signalements citoyens</span> <span class="badge unofficial" data-i18n="unofficial">non officiel</span></h3>
+      <div id="communityList"></div>
+    </section>
+    <section id="sideSec">
+      <h3 class="sect"><span data-i18n="byhazard">Situation par aléa</span></h3>
+      <div class="statgrid" id="statGrid"></div>
+      <p class="foot" data-i18n="disclaimer"></p>
+    </section>
+  </main>
+
+  <main id="view-map" class="hidden">
+    <section id="mapSec">
+      <h3 class="sect" style="margin-top:10px"><span data-i18n="map_title">Carte de vigilance</span> <span class="badge">ONM + FIRMS</span></h3>
+      <div class="mapcard"><div id="dzmap"></div>
+        <div class="legend" id="mapLegend"></div>
+        <div class="mapnote" data-i18n="map_note"></div>
+      </div>
+    </section>
+    <section id="mapInfoSec">
+      <h3 class="sect"><span id="mapInfoTitle" data-i18n="tap_hint">Touchez une wilaya</span></h3>
+      <div id="mapInfo"></div>
+    </section>
+  </main>
+
+  <main id="view-settings" class="hidden">
+    <h3 class="sect" style="margin-top:10px"><span data-i18n="nav_settings">Réglages</span></h3>
+    <div class="setcard"><h4 id="setWTitle"></h4><div class="wchips" id="wilayaChips"></div></div>
+    <div class="setcard"><h4 id="setNTitle"></h4><div id="notifToggles"></div><p class="mapnote" data-i18n="set_notif_note"></p></div>
+    <div class="setcard"><h4 id="setETitle"></h4><div class="emgrid" id="emGrid"></div></div>
+    <div class="setcard"><h4 id="setATitle"></h4><p style="font-size:13px;color:var(--on-surface-var);line-height:1.6" data-i18n="about_txt"></p>
+      <div class="actions" style="margin-top:12px"><a class="btn tonal" id="csvBtn" target="_blank"></a></div></div>
+    <p class="foot" data-i18n="disclaimer"></p>
+  </main>
+
+  <nav class="nav" id="nav">
+    <button class="on" data-view="home" onclick="setView('home')"><span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span><span data-i18n="nav_alerts">Alertes</span></button>
+    <button data-view="map" onclick="setView('map')"><span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3L4 5v16l5-2 6 2 5-2V3l-5 2z"/><path d="M9 3v16M15 5v16"/></svg></span><span data-i18n="nav_map">Carte</span></button>
+    <button onclick="openReport()"><span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg></span><span data-i18n="nav_report">Signaler</span></button>
+    <button data-view="settings" onclick="setView('settings')"><span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span data-i18n="nav_settings">Réglages</span></button>
+  </nav>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+const API_BASE="https://aisx-ews-ingest.md-mezouar.workers.dev";
+const ICONS = {
+  heat:'<path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4.5 4.5 0 1 0 4 0z"/>',
+  storm:'<path d="M17 18a4 4 0 0 0 0-8 6 6 0 0 0-11.3-1.9A4.5 4.5 0 0 0 6.5 17"/><path d="M13 11l-3 5h4l-3 5"/>',
+  wind:'<path d="M3 8h10a3 3 0 1 0-3-3"/><path d="M3 12h15a3 3 0 1 1-3 3"/><path d="M3 16h7"/>',
+  sandstorm:'<path d="M3 6c2-1.5 4-1.5 6 0s4 1.5 6 0"/><path d="M3 12c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0"/><path d="M3 18c2-1.5 4-1.5 6 0s4 1.5 6 0"/>',
+  flood:'<path d="M17 13a4 4 0 0 0 0-8 6 6 0 0 0-11.3-1.9A4.5 4.5 0 0 0 6.5 12"/><path d="M8 16v3M12 15v4M16 16v3"/>',
+  cold:'<path d="M12 3v18M5.5 6.75l13 10.5M18.5 6.75l-13 10.5"/>',
+  fire:'<path d="M12 3s-5 4.5-5 9.5a5 5 0 0 0 10 0c0-2-1-3.8-2-5-.5 1.5-1.5 2.5-2.5 2.5C13.5 8.5 14 5 12 3z"/>',
+  road:'<path d="M5 17h14l-2-9H7z"/><circle cx="8" cy="19" r="1.6"/><circle cx="16" cy="19" r="1.6"/>',
+  sat:'<rect x="9" y="9" width="6" height="6" rx="1"/><path d="M4 4l4 4M20 4l-4 4M4 20l4-4M20 20l-4-4"/>',
+  what:'<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/>',
+  where:'<path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  when:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
+  act:'<path d="M9 12l2 2 4-5"/><circle cx="12" cy="12" r="9"/>',
+  speak:'<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>',
+  phone:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.5 2.1L8 10a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.7 2z"/>',
+  animal:'<circle cx="8.3" cy="8.5" r="1.7"/><circle cx="15.7" cy="8.5" r="1.7"/><circle cx="5.3" cy="12.2" r="1.5"/><circle cx="18.7" cy="12.2" r="1.5"/><path d="M12 11.5c-2.5 0-4.6 2-4.6 4.2 0 1.5 1.1 2.6 2.5 2.6.9 0 1.5-.4 2.1-.4s1.2.4 2.1.4c1.4 0 2.5-1.1 2.5-2.6 0-2.2-2.1-4.2-4.6-4.2z"/>',
+  send:'<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/>',
+  locate:'<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>'
+};
+const CAT_ICON={fire:"fire",smoke:"sandstorm",road:"road",flood:"flood",animal:"animal",heat:"heat",other:"what"};
+function ico(name,s=22){return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||ICONS.what}</svg>`}
+
+const STR = {
+  fr:{app:"Rad Balek",tagline:"Alerte précoce · Algérie",mywilayas:"Mes wilayas",official:"Alertes officielles",
+    observed:"Incidents observés",unofficial:"non officiel",byhazard:"Situation par aléa",
+    nav_alerts:"Alertes",nav_map:"Carte",nav_report:"Signaler",nav_settings:"Réglages",
+    natl:"Vigilance nationale",until:"valable jusqu'à",wilayas_red:"wilayas en rouge",today:"aujourd'hui",
+    what:"Quoi",where:"Où",when:"Quand",action:"Que faire",source:"Source",listen:"Écouter",call:"Appeler le 14",
+    live:"en direct",local:"local",offline:"hors ligne",updated:"mis à jour",
+    red:"Vigilance rouge",orange:"Vigilance orange",yellow:"Vigilance jaune",
+    heat:"Canicule",storm:"Orages",wind:"Vent fort",sandstorm:"Tempête de sable",flood:"Pluies/Inondations",cold:"Froid/Neige",
+    fire:"Feu de forêt",road:"Accident de la route",sat:"Point chaud satellite",
+    ongoing:"en cours",contained:"maîtrisé",extinguished:"éteint",detected:"détecté",reported:"signalé",corr:"corroboré",
+    det:"détections",monitored:"58 wilayas surveillées",
+    report:"Signaler un danger",rep_cat:"Que voyez-vous ?",rep_where:"Où ?",rep_desc:"Détails (optionnel)",
+    rep_send:"Envoyer le signalement",rep_locate:"Ma position",rep_sent:"Merci ! Votre signalement aide à protéger les personnes, la nature et les animaux.",
+    rep_err:"Échec de l'envoi — réessayez",community:"Signalements citoyens",confirm:"Confirmer",
+    st_new:"non vérifié",st_ccf:"confirmé (communauté)",pos_ok:"Position détectée ✓",choose_w:"Choisir la wilaya…",
+    cat_fire:"Feu",cat_smoke:"Fumée",cat_road:"Danger routier",cat_flood:"Oued / crue",cat_animal:"Animal en danger",cat_heat:"Détresse chaleur",cat_other:"Autre",
+    map_title:"Carte de vigilance",map_note:"Les frontières des wilayas proviennent des alertes ONM (CC BY 4.0) — certaines wilayas du sud apparaîtront automatiquement.",
+    tap_hint:"Touchez une wilaya",lg_sat:"Point chaud satellite",lg_pc:"Feux en cours (Prot. Civile)",lg_no:"Pas d'alerte",
+    add_my:"Ajouter à mes wilayas",rm_my:"Retirer de mes wilayas",no_alert:"Aucune alerte en cours",
+    set_wilayas:"Mes wilayas (abonnements)",set_notif:"Alertes par aléa",
+    set_notif_note:"La vigilance rouge reste toujours active pour vos wilayas. Ces préférences s'appliqueront aux notifications push.",
+    set_emerg:"Numéros d'urgence",em_pc:"Protection Civile",em_police:"Police",em_gn:"Gendarmerie — routes",
+    set_about:"À propos & sources",export_csv:"Exporter les signalements (CSV)",
+    about_txt:"Rad Balek relaie les alertes officielles (Météo Algérie/ONM, CC BY 4.0), les détections satellite (NASA FIRMS), les bilans de la Protection Civile et GDACS — pour protéger les personnes, la végétation et les animaux dans les 58 wilayas.",
+    kpi_red:"Wilayas en rouge",kpi_orange:"Wilayas en orange",kpi_fires:"Feux en cours",kpi_rep:"Signalements citoyens",
+    disclaimer:"Application d'information — ne remplace pas les consignes officielles. En cas d'urgence, appelez la Protection Civile : 14 ou 1021.",
+    imp_heat:"Températures extrêmes dangereuses pour la santé, surtout pour les personnes âgées, les enfants et les travailleurs en extérieur.",
+    imp_storm:"Orages avec risque de foudre, rafales et pluies intenses.",imp_wind:"Rafales fortes, objets volants, conduite difficile.",
+    imp_sandstorm:"Visibilité fortement réduite, air chargé de poussière.",
+    imp_flood:"Pluies intenses avec risque de crues d'oueds et d'inondations soudaines.",imp_cold:"Froid intense, verglas et neige possibles.",
+    act_heat:["Buvez de l'eau régulièrement, même sans soif","Évitez le soleil entre 11h et 17h","Prenez des nouvelles des personnes âgées et isolées","Donnez de l'eau et de l'ombre aux animaux"],
+    act_storm:["Abritez-vous dans un bâtiment","Éloignez-vous des arbres et pylônes","Reportez vos déplacements si possible"],
+    act_wind:["Fixez les objets extérieurs","Prudence en voiture, surtout les poids lourds","Éloignez-vous du littoral"],
+    act_sandstorm:["Fermez portes et fenêtres","Portez un masque à l'extérieur","Réduisez la vitesse, allumez les feux"],
+    act_flood:["Ne traversez jamais un oued en crue, à pied ou en voiture","Éloignez-vous des lits d'oueds et zones basses","Reportez vos déplacements pendant les fortes pluies","Éloignez le bétail des lits d'oueds"],
+    act_cold:["Limitez les déplacements sur routes verglacées","Chauffez sans obstruer la ventilation (risque CO)","Protégez les personnes vulnérables du froid"]},
+  en:{app:"Rad Balek",tagline:"Early warning · Algeria",mywilayas:"My wilayas",official:"Official alerts",
+    observed:"Observed incidents",unofficial:"unofficial",byhazard:"Situation by hazard",
+    nav_alerts:"Alerts",nav_map:"Map",nav_report:"Report",nav_settings:"Settings",
+    natl:"National vigilance",until:"valid until",wilayas_red:"wilayas on red",today:"today",
+    what:"What",where:"Where",when:"When",action:"What to do",source:"Source",listen:"Listen",call:"Call 14",
+    live:"live",local:"local",offline:"offline",updated:"updated",
+    red:"Red alert",orange:"Orange alert",yellow:"Yellow alert",
+    heat:"Heat wave",storm:"Thunderstorms",wind:"Strong wind",sandstorm:"Sandstorm",flood:"Rain/Flooding",cold:"Cold/Snow",
+    fire:"Wildfire",road:"Road crash",sat:"Satellite hotspot",
+    ongoing:"ongoing",contained:"contained",extinguished:"extinguished",detected:"detected",reported:"reported",corr:"corroborated",
+    det:"detections",monitored:"58 wilayas monitored",
+    report:"Report a danger",rep_cat:"What do you see?",rep_where:"Where?",rep_desc:"Details (optional)",
+    rep_send:"Send report",rep_locate:"My position",rep_sent:"Thank you! Your report helps protect people, nature and animals.",
+    rep_err:"Send failed — try again",community:"Citizen reports",confirm:"Confirm",
+    st_new:"unverified",st_ccf:"community-confirmed",pos_ok:"Position detected ✓",choose_w:"Choose wilaya…",
+    cat_fire:"Fire",cat_smoke:"Smoke",cat_road:"Road hazard",cat_flood:"Oued / flood",cat_animal:"Animal in danger",cat_heat:"Heat distress",cat_other:"Other",
+    map_title:"Vigilance map",map_note:"Wilaya boundaries come from ONM alerts (CC BY 4.0) — some southern wilayas will appear automatically.",
+    tap_hint:"Tap a wilaya",lg_sat:"Satellite hotspot",lg_pc:"Ongoing fires (Civil Prot.)",lg_no:"No alert",
+    add_my:"Add to my wilayas",rm_my:"Remove from my wilayas",no_alert:"No active alert",
+    set_wilayas:"My wilayas (subscriptions)",set_notif:"Alerts by hazard",
+    set_notif_note:"Red vigilance always stays on for your wilayas. These preferences will apply to push notifications.",
+    set_emerg:"Emergency numbers",em_pc:"Civil Protection",em_police:"Police",em_gn:"Gendarmerie — roads",
+    set_about:"About & sources",export_csv:"Export citizen reports (CSV)",
+    about_txt:"Rad Balek relays official alerts (Météo Algérie/ONM, CC BY 4.0), satellite detections (NASA FIRMS), Civil Protection reports and GDACS — protecting people, vegetation and animals across all 58 wilayas.",
+    kpi_red:"Wilayas on red",kpi_orange:"Wilayas on orange",kpi_fires:"Ongoing fires",kpi_rep:"Citizen reports",
+    disclaimer:"Informational app — not a substitute for official guidance. In an emergency call Civil Protection: 14 or 1021.",
+    imp_heat:"Extreme temperatures dangerous to health, especially for the elderly, children and outdoor workers.",
+    imp_storm:"Thunderstorms with lightning, gusts and heavy rain.",imp_wind:"Strong gusts, flying objects, difficult driving.",
+    imp_sandstorm:"Severely reduced visibility, dust-loaded air.",
+    imp_flood:"Heavy rain with risk of flash floods and oued overflows.",imp_cold:"Severe cold, black ice and snow possible.",
+    act_heat:["Drink water regularly, even if not thirsty","Avoid the sun between 11:00 and 17:00","Check on elderly and isolated people","Give animals water and shade"],
+    act_storm:["Shelter inside a building","Stay away from trees and pylons","Postpone travel if possible"],
+    act_wind:["Secure outdoor objects","Drive carefully, especially high vehicles","Stay away from the shoreline"],
+    act_sandstorm:["Close doors and windows","Wear a mask outdoors","Slow down, lights on"],
+    act_flood:["Never cross a flooded oued, on foot or by car","Stay away from riverbeds and low areas","Postpone travel during heavy rain","Move livestock away from oued beds"],
+    act_cold:["Limit travel on icy roads","Heat safely, keep ventilation clear (CO risk)","Protect vulnerable people from the cold"]},
+  ar:{app:"رد بالك",tagline:"إنذار مبكر · الجزائر",mywilayas:"ولاياتي",official:"تنبيهات رسمية",
+    observed:"حوادث مرصودة",unofficial:"غير رسمي",byhazard:"الوضع حسب الخطر",
+    nav_alerts:"التنبيهات",nav_map:"الخريطة",nav_report:"إبلاغ",nav_settings:"الإعدادات",
+    natl:"اليقظة الوطنية",until:"صالح حتى",wilayas_red:"ولايات في الأحمر",today:"اليوم",
+    what:"ماذا",where:"أين",when:"متى",action:"ماذا تفعل",source:"المصدر",listen:"استمع",call:"اتصل بـ 14",
+    live:"مباشر",local:"محلي",offline:"دون اتصال",updated:"آخر تحديث",
+    red:"تحذير أحمر",orange:"تحذير برتقالي",yellow:"تحذير أصفر",
+    heat:"موجة حر",storm:"عواصف رعدية",wind:"رياح قوية",sandstorm:"عاصفة رملية",flood:"أمطار وفيضانات",cold:"برد وثلوج",
+    fire:"حريق غابة",road:"حادث مرور",sat:"نقطة حرارية (قمر صناعي)",
+    ongoing:"جارية",contained:"تحت الحراسة",extinguished:"أُخمد",detected:"مرصود",reported:"مبلَّغ عنه",corr:"مؤكَّد",
+    det:"رصد",monitored:"58 ولاية تحت المراقبة",
+    report:"الإبلاغ عن خطر",rep_cat:"ماذا ترى؟",rep_where:"أين؟",rep_desc:"تفاصيل (اختياري)",
+    rep_send:"إرسال البلاغ",rep_locate:"موقعي",rep_sent:"شكرًا! بلاغك يساعد على حماية الناس والطبيعة والحيوانات.",
+    rep_err:"فشل الإرسال — حاول مجددًا",community:"بلاغات المواطنين",confirm:"تأكيد",
+    st_new:"غير مؤكد",st_ccf:"مؤكد من المجتمع",pos_ok:"تم تحديد الموقع ✓",choose_w:"اختر الولاية…",
+    cat_fire:"حريق",cat_smoke:"دخان",cat_road:"خطر على الطريق",cat_flood:"واد / فيضان",cat_animal:"حيوان في خطر",cat_heat:"إجهاد حراري",cat_other:"آخر",
+    map_title:"خريطة اليقظة",map_note:"حدود الولايات مأخوذة من تنبيهات الديوان الوطني للأرصاد الجوية (CC BY 4.0) — بعض ولايات الجنوب ستظهر تلقائيًا.",
+    tap_hint:"المس ولاية",lg_sat:"نقطة حرارية (قمر صناعي)",lg_pc:"حرائق جارية (الحماية المدنية)",lg_no:"لا تنبيه",
+    add_my:"أضف إلى ولاياتي",rm_my:"احذف من ولاياتي",no_alert:"لا تنبيهات حالية",
+    set_wilayas:"ولاياتي (الاشتراكات)",set_notif:"التنبيهات حسب الخطر",
+    set_notif_note:"يبقى التحذير الأحمر مفعّلاً دائمًا لولاياتك. ستُطبَّق هذه الخيارات على الإشعارات.",
+    set_emerg:"أرقام الطوارئ",em_pc:"الحماية المدنية",em_police:"الشرطة",em_gn:"الدرك — الطرقات",
+    set_about:"حول التطبيق والمصادر",export_csv:"تصدير البلاغات (CSV)",
+    about_txt:"يرحّل «رد بالك» التنبيهات الرسمية (الديوان الوطني للأرصاد الجوية، CC BY 4.0) ورصد الأقمار الصناعية (NASA FIRMS) وبيانات الحماية المدنية وGDACS — لحماية الناس والنباتات والحيوانات في الولايات الـ58.",
+    kpi_red:"ولايات في الأحمر",kpi_orange:"ولايات في البرتقالي",kpi_fires:"حرائق جارية",kpi_rep:"بلاغات المواطنين",
+    disclaimer:"تطبيق إعلامي — لا يغني عن التعليمات الرسمية. في حالة الطوارئ اتصل بالحماية المدنية: 14 أو 1021.",
+    imp_heat:"درجات حرارة قصوى خطيرة على الصحة، خاصة لكبار السن والأطفال والعاملين في الخارج.",
+    imp_storm:"عواصف رعدية مع خطر البرق والرياح والأمطار الغزيرة.",imp_wind:"هبوب رياح قوية وأجسام متطايرة وصعوبة في القيادة.",
+    imp_sandstorm:"انخفاض شديد في الرؤية وهواء محمّل بالغبار.",
+    imp_flood:"أمطار غزيرة مع خطر فيضان الوديان والسيول المفاجئة.",imp_cold:"برد قارس مع احتمال الجليد والثلوج.",
+    act_heat:["اشرب الماء بانتظام حتى دون عطش","تجنب الشمس بين 11:00 و17:00","اطمئن على كبار السن والمعزولين","وفّر الماء والظل للحيوانات"],
+    act_storm:["احتمِ داخل مبنى","ابتعد عن الأشجار والأعمدة","أجّل التنقل إن أمكن"],
+    act_wind:["ثبّت الأغراض الخارجية","احذر أثناء القيادة خاصة المركبات العالية","ابتعد عن الشاطئ"],
+    act_sandstorm:["أغلق الأبواب والنوافذ","ارتدِ كمامة في الخارج","خفف السرعة وأشعل الأضواء"],
+    act_flood:["لا تعبر واديًا في حالة فيضان أبدًا، مشيًا أو بالسيارة","ابتعد عن مجاري الوديان والمناطق المنخفضة","أجّل التنقل أثناء الأمطار الغزيرة","أبعد المواشي عن مجاري الوديان"],
+    act_cold:["قلل من التنقل على الطرق المتجمدة","دفّئ المنزل مع تهوية كافية (خطر الغاز)","احمِ الأشخاص الهشين من البرد"]}
+};
+
+let LANG=localStorage.getItem("rb_lang")||"fr";
+let MY=JSON.parse(localStorage.getItem("rb_my")||"[16,6]");
+let NOTIF=JSON.parse(localStorage.getItem("rb_notif")||'{"heat":true,"storm":true,"flood":true,"wind":true,"sandstorm":true,"fire":true,"road":true}');
+let DATA=null, SRC="offline", WLIST=[], REPORTS=[], BOUNDS=null, VIEW="home", SELW=null;
+let REP={category:null,lat:null,lon:null,wilaya:null};
+const $=s=>document.querySelector(s);
+const t=k=>STR[LANG][k]||STR.fr[k]||k;
+const hazName=h=>t(h)||h;
+const colorClass={red:"red",orange:"orange",yellow:"yellow"};
+const hhmm=iso=>iso?new Date(iso).toLocaleTimeString(LANG==='ar'?'ar-DZ':LANG,{hour:'2-digit',minute:'2-digit'}):"";
+
+const FALLBACK={stats:{byColor:{red:7,orange:42,yellow:15},byHazard:{heat:49}},alerts:[
+  {id:"x1",source:"onm",hazard:"heat",color:"red",severity:"Extreme",wilayas:[{code:48,fr:"Relizane",ar:"غليزان"}],onset:"2026-07-18T09:00:00Z",expires:"2026-07-18T18:00:00Z",headline:{}}],incidents:[]};
+
+async function load(){
+  const urls=[API_BASE+"/v1/alerts.json","../ingest/out/alerts.json"];
+  for(let i=0;i<urls.length;i++){
+    try{const r=await fetch(urls[i],{cache:"no-store"});if(!r.ok)throw 0;DATA=await r.json();SRC=i===0?"live":"local";render();return}catch(e){}
+  }
+  DATA=FALLBACK;SRC="offline";render();
+}
+async function loadWilayas(){
+  if(WLIST.length)return WLIST;
+  try{WLIST=await (await fetch(API_BASE+"/v1/wilayas.json")).json()}catch(e){}
+  return WLIST;
+}
+async function loadBounds(){
+  if(BOUNDS)return BOUNDS;
+  const urls=[API_BASE+"/v1/boundaries.json","../ingest/data/wilayas.json"];
+  for(const u of urls){try{const r=await fetch(u);if(!r.ok)throw 0;BOUNDS=await r.json();return BOUNDS}catch(e){}}
+  return null;
+}
+function wname(code){const w=WLIST.find(x=>x.code===code);return w?(LANG==="ar"?w.ar:w.fr):(code?`W${code}`:"—")}
+function wilayaLabel(ws){if(!ws||!ws.length)return LANG==="ar"?"الجزائر":"Algérie";return ws.map(w=>LANG==="ar"?("ولاية "+w.ar):w.fr).join("، ")}
+function saveMy(){localStorage.setItem("rb_my",JSON.stringify(MY))}
+
+function setView(v){
+  VIEW=v;
+  ["home","map","settings"].forEach(x=>$("#view-"+x).classList.toggle("hidden",x!==v));
+  document.querySelectorAll(".nav button[data-view]").forEach(b=>b.classList.toggle("on",b.dataset.view===v));
+  if(v==="map")buildMap();
+  if(v==="settings")paintSettings();
+}
+
+function render(){
+  document.documentElement.lang=LANG;
+  document.documentElement.dir=LANG==="ar"?"rtl":"ltr";
+  document.title=(LANG==="ar"?"رد بالك":"Rad Balek")+" — "+t("tagline");
+  document.querySelectorAll("[data-i18n]").forEach(el=>el.textContent=t(el.dataset.i18n));
+  $("#liveLbl").textContent=t(SRC)+(DATA&&DATA.generatedAt?` · ${t("updated")} ${hhmm(DATA.generatedAt)}`:"");
+  if(!DATA)return;
+
+  const alerts=(DATA.alerts||[]).filter(a=>a.source!=="gdacs");
+  const order={red:0,orange:1,yellow:2};
+  alerts.sort((a,b)=>order[a.color]-order[b.color]);
+  const byColor=DATA.stats?.byColor||{};
+  const maxColor=alerts.length?alerts[0].color:"yellow";
+  const maxHaz=alerts.length?alerts[0].hazard:"heat";
+  const redW=new Set(alerts.filter(a=>a.color==="red").flatMap(a=>a.wilayas.map(w=>w.code)));
+  const orgW=new Set(alerts.filter(a=>a.color==="orange").flatMap(a=>a.wilayas.map(w=>w.code)));
+  const until=alerts.find(a=>a.color===maxColor)?.expires;
+
+  const cc=maxColor==="orange"?"orange":maxColor==="yellow"?"yellow":"red";
+  $("#hero").style.background=`var(--${cc}-c)`;
+  $("#hero").style.color=`var(--on-${cc}-c)`;
+  $("#hero").innerHTML=`
+    <div class="k">${t("natl")} · ${t("monitored")}</div>
+    <div class="lvl"><span class="dot"></span><h2>${t(maxColor)} — ${hazName(maxHaz)}</h2></div>
+    <p>${redW.size} ${t("wilayas_red")} · ${t("until")} ${hhmm(until)}</p>`;
+
+  const fires=DATA.stats?.dgpcSitrep?.ongoing??0;
+  $("#kpis").innerHTML=`
+    <div class="kpi red" onclick="setView('map')"><div class="top"><span class="n">${redW.size}</span>${ico("heat",22)}</div><div class="l">${t("kpi_red")}</div></div>
+    <div class="kpi orange" onclick="setView('map')"><div class="top"><span class="n">${orgW.size}</span>${ico("storm",22)}</div><div class="l">${t("kpi_orange")}</div></div>
+    <div class="kpi fire" onclick="setView('map')"><div class="top"><span class="n">${fires}</span>${ico("fire",22)}</div><div class="l">${t("kpi_fires")}</div></div>
+    <div class="kpi rep" onclick="openReport()"><div class="top"><span class="n">${REPORTS.length}</span>${ico("send",20)}</div><div class="l">${t("kpi_rep")}</div></div>`;
+
+  $("#myWilayas").innerHTML=MY.map(code=>{
+    const mine=alerts.filter(a=>a.wilayas.some(w=>w.code===code));
+    const top=mine[0];
+    const nm={fr:wname(code),ar:wname(code)};
+    const nfires=(DATA.incidents||[]).filter(i=>i.source==="dgpc-telegram"&&i.hazard==="fire"&&i.status==="ongoing"&&i.wilayas.some(x=>x.code===code)).length;
+    let status=top?`<span class="d" style="background:var(--${top.color==='orange'?'orange':top.color==='yellow'?'yellow':'red'})"></span>${hazName(top.hazard)} · ${t(top.color).split(" ").pop()}`:`<span class="d" style="background:var(--green)"></span>OK`;
+    let fireLine=nfires?`<div class="ws">${ico("fire",13)} ${nfires} ${t("ongoing")}</div>`:"";
+    return `<div class="wcard"><div class="wn">${wname(code)}</div><div class="ws">${status}</div>${fireLine}</div>`;
+  }).join("");
+
+  $("#alertList").innerHTML=alerts.slice(0,10).map((a,i)=>`
+    <div class="card" style="animation-delay:${i*40}ms" onclick="openSheet('${a.id}')">
+      <div class="lead ${colorClass[a.color]}">${ico(a.hazard)}</div>
+      <div class="tx">
+        <div class="t1">${hazName(a.hazard)} — ${t(a.color)}</div>
+        <div class="t2">${wilayaLabel(a.wilayas)} · ${t("today")} ${hhmm(a.onset)} → ${hhmm(a.expires)}</div>
+      </div>
+      <svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="${LANG==='ar'?'M15 6l-6 6 6 6':'M9 6l6 6-6 6'}"/></svg>
+    </div>`).join("");
+
+  const inc=DATA.incidents||[];
+  const pcf=inc.filter(i=>i.source==="dgpc-telegram"&&i.hazard==="fire"&&i.status==="ongoing").slice(0,4);
+  const sats=inc.filter(i=>i.source==="firms"&&i.corroborated&&!i.possibleIndustrial).sort((a,b)=>b.totalFrp-a.totalFrp).slice(0,3);
+  const roads=inc.filter(i=>i.hazard==="road").slice(0,3);
+  const stCls={ongoing:"st-ongoing",contained:"st-contained",extinguished:"st-out"};
+  $("#incidentList").innerHTML=[
+    ...pcf.map(f=>({icon:"fire",cls:"orange",t1:hazName("fire"),t2:wilayaLabel(f.wilayas)+(f.commune?` · ${f.commune}`:""),st:t(f.status),stc:stCls[f.status]})),
+    ...sats.map(s=>({icon:"sat",cls:"muted",t1:t("sat"),t2:`${wilayaLabel(s.wilayas)} · ${s.detections} ${t("det")}`,st:t("corr")+" ✓",stc:"st-ok"})),
+    ...roads.map(r=>({icon:"road",cls:"muted",t1:hazName("road"),t2:wilayaLabel(r.wilayas),st:t("reported"),stc:"st-contained"}))
+  ].map((c,i)=>`
+    <div class="card" style="animation-delay:${i*40}ms;cursor:default">
+      <div class="lead ${c.cls}">${ico(c.icon)}</div>
+      <div class="tx"><div class="t1">${c.t1}</div><div class="t2">${c.t2}</div></div>
+      <span class="stat ${c.stc}">${c.st}</span>
+    </div>`).join("");
+
+  const byHaz=DATA.stats?.byHazard||{};
+  $("#statGrid").innerHTML=Object.entries(byHaz).sort((a,b)=>b[1]-a[1]).map(([h,n])=>`
+    <div class="scard"><span class="ic">${ico(h,17)}</span><div><div class="n">${n}</div><div class="l">${hazName(h)}</div></div></div>`).join("");
+
+  paintCommunity();
+  if(VIEW==="map")buildMap(true);
+  if(VIEW==="settings")paintSettings();
+}
+
+/* ---------- vigilance map ---------- */
+let MAPBUILT=false;
+async function buildMap(force){
+  if(MAPBUILT&&!force)return;
+  await loadBounds();await loadWilayas();
+  if(!BOUNDS||!DATA){$("#dzmap").innerHTML=`<p class="mapnote">${t("offline")}</p>`;return}
+  MAPBUILT=true;
+  const feats=BOUNDS.features;
+  let mnLo=99,mnLa=99,mxLo=-99,mxLa=-99;
+  const each=(f,cb)=>{const rings=f.geometry.type==="Polygon"?[f.geometry.coordinates]:f.geometry.coordinates;for(const p of rings)cb(p[0])};
+  feats.forEach(f=>each(f,ring=>ring.forEach(([lo,la])=>{if(lo<mnLo)mnLo=lo;if(la<mnLa)mnLa=la;if(lo>mxLo)mxLo=lo;if(la>mxLa)mxLa=la})));
+  const cos=Math.cos(((mnLa+mxLa)/2)*Math.PI/180);
+  const W=800,k=W/((mxLo-mnLo)*cos),H=Math.round((mxLa-mnLa)*k);
+  const X=lo=>((lo-mnLo)*cos*k).toFixed(1),Y=la=>((mxLa-la)*k).toFixed(1);
+
+  const alerts=(DATA.alerts||[]).filter(a=>a.source!=="gdacs");
+  const lvl={};
+  for(const a of alerts)for(const w of a.wilayas){const r={red:3,orange:2,yellow:1}[a.color]||0;if(r>(lvl[w.code]||0))lvl[w.code]=r}
+  const fill=c=>({3:"var(--red-c)",2:"var(--orange-c)",1:"var(--yellow-c)"}[lvl[c]]||"var(--surface-3)");
+  const pcOngoing=new Set((DATA.incidents||[]).filter(i=>i.source==="dgpc-telegram"&&i.status==="ongoing").flatMap(i=>i.wilayas.map(w=>w.code)));
+
+  let paths="",marks="";
+  for(const f of feats){
+    let d="";
+    each(f,ring=>{d+="M"+ring.map(([lo,la])=>`${X(lo)},${Y(la)}`).join("L")+"Z"});
+    paths+=`<path class="wpath${SELW===f.properties.code?" sel":""}" data-code="${f.properties.code}" d="${d}" fill="${fill(f.properties.code)}" stroke="var(--surface)" stroke-width="1" onclick="mapSelect(${f.properties.code})"><title>${f.properties.fr}</title></path>`;
+    if(pcOngoing.has(f.properties.code)){
+      let sx=0,sy=0,n=0;each(f,ring=>ring.forEach(([lo,la])=>{sx+=+X(lo);sy+=+Y(la);n++}));
+      marks+=`<circle cx="${(sx/n).toFixed(0)}" cy="${(sy/n).toFixed(0)}" r="7" fill="none" stroke="var(--orange)" stroke-width="2.5"/>`;
+    }
+  }
+  let dots="";
+  for(const i of (DATA.incidents||[])){
+    if(i.source!=="firms"||i.possibleIndustrial)continue;
+    if(i.lon<mnLo||i.lon>mxLo||i.lat<mnLa||i.lat>mxLa)continue;
+    const r=Math.min(3+(i.detections||1)*.3,9);
+    dots+=`<circle cx="${X(i.lon)}" cy="${Y(i.lat)}" r="${r.toFixed(1)}" fill="var(--red)" opacity="${i.corroborated?.95:.55}" stroke="var(--surface)" stroke-width=".6"/>`;
+  }
+  $("#dzmap").innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t("map_title")}" dir="ltr">${paths}${marks}${dots}</svg>`;
+  $("#mapLegend").innerHTML=`
+    <span><span class="sw" style="background:var(--red-c)"></span>${t("red")}</span>
+    <span><span class="sw" style="background:var(--orange-c)"></span>${t("orange")}</span>
+    <span><span class="sw" style="background:var(--yellow-c)"></span>${t("yellow")}</span>
+    <span><span class="sw" style="background:var(--surface-3)"></span>${t("lg_no")}</span>
+    <span><span class="sw" style="background:var(--red);border-radius:99px"></span>${t("lg_sat")}</span>
+    <span><span class="sw" style="background:transparent;border:2.5px solid var(--orange);border-radius:99px"></span>${t("lg_pc")}</span>`;
+  if(SELW)mapSelect(SELW);
+}
+function mapSelect(code){
+  SELW=code;
+  document.querySelectorAll(".wpath").forEach(p=>p.classList.toggle("sel",Number(p.dataset.code)===code));
+  const alerts=(DATA.alerts||[]).filter(a=>a.source!=="gdacs"&&a.wilayas.some(w=>w.code===code));
+  const fires=(DATA.incidents||[]).filter(i=>i.source==="dgpc-telegram"&&i.hazard==="fire"&&i.status==="ongoing"&&i.wilayas.some(w=>w.code===code));
+  const sats=(DATA.incidents||[]).filter(i=>i.source==="firms"&&!i.possibleIndustrial&&i.wilayas.some(w=>w.code===code));
+  const inMy=MY.includes(code);
+  $("#mapInfoTitle").textContent=wname(code);
+  $("#mapInfo").innerHTML=
+    (alerts.length?alerts.map(a=>`
+      <div class="card" onclick="openSheet('${a.id}')">
+        <div class="lead ${colorClass[a.color]}">${ico(a.hazard)}</div>
+        <div class="tx"><div class="t1">${hazName(a.hazard)} — ${t(a.color)}</div>
+        <div class="t2">${hhmm(a.onset)} → ${hhmm(a.expires)}</div></div>
+      </div>`).join(""):`<div class="card" style="cursor:default"><div class="lead muted">${ico("act")}</div><div class="tx"><div class="t1">${t("no_alert")}</div></div></div>`)
+    +fires.map(f=>`<div class="card" style="cursor:default"><div class="lead orange">${ico("fire")}</div><div class="tx"><div class="t1">${hazName("fire")}</div><div class="t2">${f.commune||""}</div></div><span class="stat st-ongoing">${t("ongoing")}</span></div>`).join("")
+    +(sats.length?`<div class="card" style="cursor:default"><div class="lead muted">${ico("sat")}</div><div class="tx"><div class="t1">${t("sat")}</div><div class="t2">${sats.length} · ${sats.reduce((s,x)=>s+(x.detections||0),0)} ${t("det")}</div></div></div>`:"")
+    +`<div class="actions"><button class="btn ${inMy?"tonal":"fill"}" onclick="toggleMy(${code});mapSelect(${code})">${inMy?t("rm_my"):t("add_my")}</button></div>`;
+}
+function toggleMy(code){
+  if(MY.includes(code))MY=MY.filter(c=>c!==code);else MY.push(code);
+  saveMy();render();
+}
+
+/* ---------- settings ---------- */
+function paintSettings(){
+  $("#setWTitle").textContent=t("set_wilayas");
+  $("#setNTitle").textContent=t("set_notif");
+  $("#setETitle").textContent=t("set_emerg");
+  $("#setATitle").textContent=t("set_about");
+  $("#csvBtn").textContent=t("export_csv");
+  $("#csvBtn").href=API_BASE+"/v1/reports.csv";
+  $("#wilayaChips").innerHTML=WLIST.map(w=>`<button class="wchip${MY.includes(w.code)?" on":""}" onclick="toggleMy(${w.code});paintSettings()">${w.code} ${LANG==="ar"?w.ar:w.fr}</button>`).join("")||`<span class="mapnote">…</span>`;
+  const hazards=["heat","storm","flood","wind","sandstorm","fire","road"];
+  $("#notifToggles").innerHTML=hazards.map(h=>`
+    <div class="togrow"><span style="display:inline-flex;align-items:center;gap:8px">${ico(h,17)} ${hazName(h)}</span>
+    <span class="tog${NOTIF[h]?" on":""}" onclick="this.classList.toggle('on');NOTIF['${h}']=!NOTIF['${h}'];localStorage.setItem('rb_notif',JSON.stringify(NOTIF))"></span></div>`).join("");
+  $("#emGrid").innerHTML=`
+    <a class="emcard" href="tel:14">${ico("phone",18)}<div><div class="num">14</div><div class="lbl">${t("em_pc")}</div></div></a>
+    <a class="emcard" href="tel:1021">${ico("phone",18)}<div><div class="num">1021</div><div class="lbl">${t("em_pc")}</div></div></a>
+    <a class="emcard" href="tel:17">${ico("phone",18)}<div><div class="num">17</div><div class="lbl">${t("em_police")}</div></div></a>
+    <a class="emcard" href="tel:1055">${ico("phone",18)}<div><div class="num">1055</div><div class="lbl">${t("em_gn")}</div></div></a>`;
+}
+
+/* ---------- alert detail sheet ---------- */
+function openSheet(id){
+  const a=(DATA.alerts||[]).find(x=>x.id===id);if(!a)return;
+  const acts=STR[LANG]["act_"+a.hazard]||STR[LANG].act_heat;
+  const imp=STR[LANG]["imp_"+a.hazard]||STR[LANG].imp_heat;
+  $("#sheet").innerHTML=`
+    <div class="grab"></div>
+    <div class="band ${colorClass[a.color]}">
+      <div class="ev">${ico(a.hazard,26)} ${hazName(a.hazard)} — ${t(a.color)}</div>
+      <div class="src">${t("source")}: Météo Algérie (ONM) · ${hhmm(a.sent)}</div>
+    </div>
+    <div class="body">
+      <div class="row5"><div class="ic">${ico("what",18)}</div><div><div class="k">${t("what")}</div><div class="v">${imp}</div></div></div>
+      <div class="row5"><div class="ic">${ico("where",18)}</div><div><div class="k">${t("where")}</div><div class="v">${wilayaLabel(a.wilayas)}</div></div></div>
+      <div class="row5"><div class="ic">${ico("when",18)}</div><div><div class="k">${t("when")}</div><div class="v">${t("today")} ${hhmm(a.onset)} → ${hhmm(a.expires)}</div></div></div>
+      <div class="row5"><div class="ic">${ico("act",18)}</div><div><div class="k">${t("action")}</div><ul>${acts.map(x=>`<li>${x}</li>`).join("")}</ul></div></div>
+      <div class="actions">
+        <button class="btn fill" onclick="speak('${id}')">${ico("speak",16)} ${t("listen")}</button>
+        <a class="btn danger" href="tel:14">${ico("phone",16)} ${t("call")}</a>
+      </div>
+    </div>`;
+  $("#scrim").classList.add("open");$("#sheet").classList.add("open");
+}
+function closeSheet(){$("#scrim").classList.remove("open");$("#sheet").classList.remove("open")}
+$("#scrim").addEventListener("click",closeSheet);
+function speak(id){
+  const a=(DATA.alerts||[]).find(x=>x.id===id);if(!a)return;
+  const acts=STR[LANG]["act_"+a.hazard]||[];
+  const msg=`${hazName(a.hazard)}. ${t(a.color)}. ${wilayaLabel(a.wilayas)}. ${acts.join(". ")}`;
+  const u=new SpeechSynthesisUtterance(msg);
+  u.lang=LANG==="ar"?"ar-SA":LANG==="en"?"en-US":"fr-FR";
+  speechSynthesis.cancel();speechSynthesis.speak(u);
+}
+
+/* ---------- community reports ---------- */
+async function openReport(){
+  await loadWilayas();
+  REP={category:null,lat:null,lon:null,wilaya:null};
+  const cats=["fire","smoke","road","flood","animal","heat","other"];
+  $("#sheet").innerHTML=`
+    <div class="grab"></div>
+    <div class="band" style="background:var(--primary-container);color:var(--on-primary-container)">
+      <div class="ev">${ico("send",24)} ${t("report")}</div>
+      <div class="src">${t("disclaimer").split("—")[0]}</div>
+    </div>
+    <div class="body">
+      <div class="row5"><div class="ic">${ico("what",18)}</div><div style="flex:1"><div class="k">${t("rep_cat")}</div>
+        <div class="catgrid">${cats.map(c=>`<button class="catbtn" data-cat="${c}" onclick="pickCat(this)">${ico(CAT_ICON[c],20)}<span>${t("cat_"+c)}</span></button>`).join("")}</div>
+      </div></div>
+      <div class="row5"><div class="ic">${ico("where",18)}</div><div style="flex:1"><div class="k">${t("rep_where")}</div>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button class="btn fill" onclick="useMyPos(this)" style="padding:9px 14px;font-size:12.5px">${ico("locate",15)} ${t("rep_locate")}</button>
+        </div>
+        <select class="repfield" id="repWilaya"><option value="">${t("choose_w")}</option>
+          ${WLIST.map(w=>`<option value="${w.code}">${w.code} — ${LANG==="ar"?w.ar:w.fr}</option>`).join("")}</select>
+      </div></div>
+      <div class="row5"><div class="ic">${ico("act",18)}</div><div style="flex:1"><div class="k">${t("rep_desc")}</div>
+        <textarea class="repfield" id="repDesc" maxlength="280"></textarea>
+      </div></div>
+      <div class="actions"><button class="btn fill" id="repSend" onclick="submitReport()">${ico("send",16)} ${t("rep_send")}</button></div>
+    </div>`;
+  $("#scrim").classList.add("open");$("#sheet").classList.add("open");
+}
+function pickCat(btn){document.querySelectorAll(".catbtn").forEach(b=>b.classList.toggle("on",b===btn));REP.category=btn.dataset.cat}
+function useMyPos(btn){navigator.geolocation.getCurrentPosition(p=>{REP.lat=p.coords.latitude;REP.lon=p.coords.longitude;btn.textContent=t("pos_ok")},()=>{},{enableHighAccuracy:false,timeout:8000})}
+async function submitReport(){
+  const sel=$("#repWilaya");if(sel&&sel.value)REP.wilaya=Number(sel.value);
+  if(!REP.category||(!REP.wilaya&&REP.lat===null))return;
+  $("#repSend").disabled=true;
+  try{
+    const r=await fetch(API_BASE+"/v1/reports",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({category:REP.category,lat:REP.lat,lon:REP.lon,wilaya:REP.wilaya,description:$("#repDesc").value,lang:LANG})});
+    if(!r.ok)throw 0;
+    $("#sheet .body").innerHTML=`<div style="text-align:center;padding:26px 10px">
+      <div style="color:var(--green);margin:0 auto 10px;width:44px">${ico("act",44)}</div>
+      <div style="font-size:15px;font-weight:600">${t("rep_sent")}</div></div>`;
+    setTimeout(()=>{closeSheet();loadReports()},1800);
+  }catch(e){$("#repSend").disabled=false;$("#repSend").textContent=t("rep_err")}
+}
+async function loadReports(){
+  try{const r=await fetch(API_BASE+"/v1/reports.json?limit=30",{cache:"no-store"});REPORTS=(await r.json()).reports||[]}catch(e){REPORTS=[]}
+  paintCommunity();
+  if(DATA)render();
+}
+function paintCommunity(){
+  const el=$("#communityList");if(!el)return;
+  el.innerHTML=REPORTS.slice(0,8).map(r=>`
+    <div class="card" style="cursor:default">
+      <div class="lead muted">${ico(CAT_ICON[r.category]||"what")}</div>
+      <div class="tx">
+        <div class="t1">${t("cat_"+r.category)}</div>
+        <div class="t2">${wname(r.wilaya)} · ${hhmm(r.at)}${r.description?` · ${r.description.slice(0,60)}`:""}</div>
+        <div class="t2" style="font-size:11px">${r.status==="community-confirmed"?`<span style="color:var(--green);font-weight:700">${t("st_ccf")} ✓</span>`:t("st_new")}</div>
+      </div>
+      <button class="conf" onclick="confirmRep('${r.id}',this)">👍 ${r.confirms||0}</button>
+    </div>`).join("")||"";
+}
+async function confirmRep(id,btn){
+  try{
+    const r=await fetch(API_BASE+"/v1/reports/confirm",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({id})});
+    const j=await r.json();
+    if(j.confirms!==undefined)btn.textContent=`👍 ${j.confirms}`;
+    btn.classList.add("done");btn.disabled=true;
+  }catch(e){}
+}
+
+/* ---------- boot ---------- */
+document.querySelectorAll("#langSeg button").forEach(b=>b.classList.toggle("on",b.dataset.lang===LANG));
+$("#langSeg").addEventListener("click",e=>{
+  const b=e.target.closest("button");if(!b)return;
+  document.querySelectorAll("#langSeg button").forEach(x=>x.classList.toggle("on",x===b));
+  LANG=b.dataset.lang;localStorage.setItem("rb_lang",LANG);MAPBUILT=false;render();
+  if(VIEW==="map")buildMap(true);
+});
+$("#themeBtn").addEventListener("click",()=>{
+  const r=document.documentElement;
+  r.dataset.theme=r.dataset.theme==="dark"?"":"dark";
+  localStorage.setItem("rb_theme",r.dataset.theme);
+});
+const th=localStorage.getItem("rb_theme");
+if(th==="dark"||(th===null&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.dataset.theme="dark";
+
+load();
+loadWilayas().then(loadReports);
+loadBounds();
+setInterval(()=>{load();loadReports()}, 5*60*1000);
+</script>
+</body>
+</html>

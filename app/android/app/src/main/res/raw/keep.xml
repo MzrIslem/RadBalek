@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The siren sounds are referenced only via dynamically-built
+     android.resource:// URIs (notification channels), which the release
+     resource shrinker cannot trace — without this keep rule it strips the
+     wav files and every alert is silent. Never remove. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/rb_high,@raw/rb_med,@raw/rb_low,@raw/rb_clear" />

@@ -1,0 +1,52 @@
+import 'dart:ui' as ui;
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'src/app_state.dart';
+import 'src/keys.dart';
+import 'src/screens/shell.dart';
+import 'src/theme.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb) {
+    // Firebase Messaging (FCM) only. AI runs server-side via the worker, so no
+    // App Check / Play Integrity is needed. Android reads google-services.json.
+    try {
+      await Firebase.initializeApp();
+    } catch (_) {}
+  }
+  runApp(const RadBalekApp());
+}
+
+class RadBalekApp extends StatelessWidget {
+  final AppState? state; // injectable for tests
+  const RadBalekApp({super.key, this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider<AppState>(
+      create: (_) {
+        final st = state ?? AppState();
+        if (state == null) st.init();
+        return st;
+      },
+      child: Consumer<AppState>(
+        builder: (ctx, st, _) => MaterialApp(
+          title: 'Rad Balek رد بالك',
+          scaffoldMessengerKey: scaffoldMessengerKey,
+          debugShowCheckedModeBanner: false,
+          theme: RBTheme.light(),
+          darkTheme: RBTheme.dark(),
+          themeMode: st.dark ? ThemeMode.dark : ThemeMode.light,
+          builder: (ctx, child) => Directionality(
+            textDirection: st.rtl ? ui.TextDirection.rtl : ui.TextDirection.ltr,
+            child: child ?? const SizedBox.shrink(),
+          ),
+          home: const Shell(),
+        ),
+      ),
+    );
+  }
+}
