@@ -101,7 +101,7 @@ a cloud API, or a permission the user might not have granted.**
 
 ## Team
 
-Built by **[YoushopDZ](https://github.com/Krizotiros)** — an Algerian startup dev team.
+Built by **[YoushopDZ](https://github.com/MzrIslem)** — an Algerian startup dev team.
 
 - **MzrIslem** — author & lead developer
 

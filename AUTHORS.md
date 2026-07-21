@@ -8,7 +8,7 @@
 
 ## Organisation
 
-- **YoushopDZ** — startup dev team · https://github.com/Krizotiros
+- **YoushopDZ** — startup dev team · https://github.com/MzrIslem
 
 ## Contributors
 
