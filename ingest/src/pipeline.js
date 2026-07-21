@@ -4,6 +4,9 @@
 
 import { fetchOnmAlerts } from "./capfeed.js";
 import { fetchDgpcPosts } from "./telegram.js";
+import { fetchDgpcWeb } from "./dgpcweb.js";
+import { fetchNews } from "./news.js";
+import { fetchCraag, enrichQuakes } from "./craag.js";
 import { fetchFirmsHotspots, significantHotspots } from "./firms.js";
 import { fetchQuakes } from "./quakes.js";
 import { makeWilayaResolver, clusterHotspots, inFlareZone } from "./geo.js";
@@ -16,8 +19,11 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
     fetchDgpcPosts(fetchFn),
     fetchFirmsHotspots(firmsMapKey, { fetchFn }),
     fetchQuakes(fetchFn),
+    fetchDgpcWeb(fetchFn),
+    fetchNews(fetchFn),
+    fetchCraag(fetchFn),
   ]);
-  const [onmR, dgpcR, firmsR, quakesR] = settled;
+  const [onmR, dgpcR, firmsR, quakesR, dgpcWebR, newsR, craagR] = settled;
   const grab = (r, name, fallback) => {
     if (r.status === "fulfilled") return r.value;
     errors.push({ source: name, error: String(r.reason) });
@@ -27,7 +33,12 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
   const onm = grab(onmR, "onm", []);
   const dgpcPosts = grab(dgpcR, "dgpc-telegram", []);
   const firms = grab(firmsR, "firms", { skipped: true, hotspots: [] });
-  const quakes = grab(quakesR, "usgs", []);
+  const dgpcWeb = grab(dgpcWebR, "dgpc-web", []);
+  const news = grab(newsR, "press", []);
+  const craagRows = grab(craagR, "craag", []);
+  // CRAAG lags days — never an alert trigger, only official confirmation +
+  // the wilaya name that EMSC never provides.
+  const quakes = enrichQuakes(grab(quakesR, "usgs", []), craagRows);
 
   const nowIso = now().toISOString();
 
@@ -107,6 +118,8 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
         },
       });
     }
+    // CRAAG (official national authority) may name the wilaya EMSC left blank.
+    const place = w || q.wilaya || null;
     incidents.push({
       id: q.id,
       class: "incident",
@@ -119,12 +132,52 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
       depth: q.depth,
       lat: q.lat,
       lon: q.lon,
-      wilayas: w ? [{ code: w.code, fr: w.fr, ar: w.ar }] : [],
+      // Official Algerian confirmation, when CRAAG has caught up (days later).
+      craagMag: q.craag ? q.craag.mag : undefined,
+      craagRegion: q.craag ? q.craag.region : undefined,
+      wilayas: place ? [{ code: place.code, fr: place.fr, ar: place.ar }] : [],
       headline: {
-        fr: `Séisme M${q.mag} — ${w ? w.fr : q.place || "Algérie"}`,
-        en: `Earthquake M${q.mag} — ${w ? w.fr : q.place || "Algeria"}`,
-        ar: `زلزال ${q.mag} — ${w ? "ولاية " + w.ar : "الجزائر"}`,
+        fr: `Séisme M${q.mag} — ${place ? place.fr : q.place || "Algérie"}`,
+        en: `Earthquake M${q.mag} — ${place ? place.fr : q.place || "Algeria"}`,
+        ar: `زلزال ${q.mag} — ${place ? "ولاية " + place.ar : "الجزائر"}`,
       },
+    });
+  }
+
+  // --- Protection Civile official site (dgpc.dz) — resilience path for the
+  // Telegram scrape, plus specific field incidents. National daily bilans are
+  // deliberately excluded from the map (they cover the whole country).
+  for (const p of dgpcWeb) {
+    if (p.aggregate || !p.wilayas.length) continue;
+    if (!["fire", "flood", "road-crash", "gas", "drowning"].includes(p.kind)) continue;
+    incidents.push({
+      id: p.id,
+      class: "incident",
+      source: "dgpc-web",
+      sourceName: "Protection Civile (dgpc.dz)",
+      hazard: p.kind === "road-crash" ? "road" : p.kind === "drowning" || p.kind === "gas" ? "other" : p.kind,
+      status: "reported",
+      observedAt: p.postedAt,
+      wilayas: p.wilayas,
+      link: p.link,
+      headline: { fr: p.title, en: p.title, ar: p.title },
+    });
+  }
+
+  // --- Algerian press (UNOFFICIAL) — covers hazard classes the official feeds
+  // structurally miss: floods in progress, road closures, collapses, storms.
+  for (const n of news) {
+    incidents.push({
+      id: n.id,
+      class: "incident",
+      source: "press",
+      sourceName: n.sourceName,
+      hazard: n.hazard,
+      status: "unverified",
+      observedAt: n.observedAt,
+      wilayas: n.wilayas,
+      link: n.link,
+      headline: { fr: n.title, en: n.title, ar: n.title },
     });
   }
 
@@ -132,13 +185,18 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
 
   return {
     generatedAt: nowIso,
-    attribution: "Alerts: Office National de la Météorologie (CC BY 4.0) · Incidents: NASA FIRMS, Protection Civile Algérienne",
+    attribution:
+      "Alerts: Office National de la Météorologie (CC BY 4.0) · Incidents: NASA FIRMS, " +
+      "Protection Civile Algérienne (dgpc.dz), CRAAG, EMSC · Presse: TSA, Ennahar (non officiel)",
     stats: {
       onmEntries: onm.length,
       activeAlerts: alerts.length,
       byHazard: countBy(alerts, (a) => a.hazard),
       byColor: countBy(alerts, (a) => a.color),
       dgpcPosts: dgpcPosts.length,
+      dgpcWebPosts: dgpcWeb.length,
+      pressItems: news.length,
+      craagRows: craagRows.length,
       dgpcSitrep: latestSitrep ? { postedAt: latestSitrep.postedAt, ...latestSitrep.stats } : null,
       firmsSkipped: firms.skipped || false,
       fireClusters: clusters.length,

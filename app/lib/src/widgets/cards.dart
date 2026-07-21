@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../app_state.dart';
 import '../models.dart';
 import '../strings.dart';
@@ -140,8 +141,13 @@ List<Widget> incidentCards(BuildContext context, AppState st, Snapshot snap) {
           .toList()
         ..sort((a, b) => b.detections.compareTo(a.detections)))
       .take(5);
-  final roads = snap.incidents.where((i) => i.hazard == 'road').take(5);
+  final roads = snap.incidents.where((i) => i.hazard == 'road' && i.source != 'press').take(5);
   final quakes = snap.incidents.where((i) => i.hazard == 'quake').take(5);
+  // Official Protection Civile field posts (dgpc.dz) + Algerian press. The
+  // press layer covers hazards the official feeds structurally miss (floods in
+  // progress, road closures, collapses) and is labelled non-official.
+  final official = snap.incidents.where((i) => i.source == 'dgpc-web').take(5);
+  final press = snap.incidents.where((i) => i.source == 'press').take(6);
 
   Widget chip(String text, Color color) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
@@ -195,7 +201,63 @@ List<Widget> incidentCards(BuildContext context, AppState st, Snapshot snap) {
     for (final q in quakes)
       card(Icons.vibration, '', '${S.t(lang, 'quake')} M${q.mag ?? '?'}',
           '${wLabel(st, q.wilayas)} · ${hhmm(q.observedAt)}', chip('EMSC', orange)),
+    for (final o in official) sourceCard(context, st, o, official: true),
+    for (final p in press) sourceCard(context, st, p, official: false),
   ];
+}
+
+/// A headline-carrying incident from dgpc.dz (official) or the Algerian press
+/// (non-official). Tapping opens the source article — provenance matters when
+/// the app is telling someone their area may be in danger.
+Widget sourceCard(BuildContext context, AppState st, Incident i, {required bool official}) {
+  final lang = st.lang;
+  final cs = Theme.of(context).colorScheme;
+  final accent = official ? vigilance('green', st.dark).solid : cs.onSurfaceVariant;
+  return InkWell(
+    onTap: i.link == null ? null : () => launchUrl(Uri.parse(i.link!), mode: LaunchMode.externalApplication),
+    borderRadius: BorderRadius.circular(22),
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(22)),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(color: cs.surfaceContainerHighest, borderRadius: BorderRadius.circular(18)),
+          child: Icon(hazardIcon(i.hazard), color: cs.onSurfaceVariant, size: 26),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(99),
+                  border: Border.all(color: accent, width: 1.2),
+                ),
+                child: Text(official ? S.t(lang, 'src_official') : S.t(lang, 'unofficial'),
+                    style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: accent)),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text('${wLabel(st, i.wilayas)} · ${hhmm(i.observedAt)}',
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant)),
+              ),
+            ]),
+            const SizedBox(height: 5),
+            Text(i.headlineFr ?? S.t(lang, i.hazard),
+                maxLines: 3, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.25)),
+          ]),
+        ),
+        if (i.link != null)
+          Icon(Icons.open_in_new, size: 16, color: cs.onSurfaceVariant.withValues(alpha: .7)),
+      ]),
+    ),
+  );
 }
 
 Widget reportCard(BuildContext context, AppState st, CitizenReport r) {

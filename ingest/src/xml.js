@@ -20,12 +20,21 @@ export function attr(xml, tagName, attrName) {
   return m ? decodeEntities(m[1]) : null;
 }
 
+// Named entities WordPress emits constantly (dgpc.dz, TSA, Ennahar all do).
+const NAMED = {
+  nbsp: " ", rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“",
+  hellip: "…", mdash: "—", ndash: "–", eacute: "é", egrave: "è",
+  ecirc: "ê", agrave: "à", acirc: "â", ccedil: "ç", ugrave: "ù", ocirc: "ô",
+  icirc: "î", iuml: "ï", euml: "ë", laquo: "«", raquo: "»", deg: "°", euro: "€",
+};
+
 export function decodeEntities(s) {
   return s
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&([a-zA-Z]+);/g, (m, name) => (name in NAMED ? NAMED[name] : m))
     .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
     .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCodePoint(parseInt(n, 16)))
     .replace(/&amp;/g, "&");

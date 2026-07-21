@@ -107,3 +107,34 @@ export function wilayaInArabicText(text) {
 export function wilayaByCode(code) {
   return WILAYAS.find((w) => w.code === code) || null;
 }
+
+/// Accent-folded lowercase that KEEPS word separators — unlike normFr(), which
+/// strips everything to bare letters and makes substring matching unsafe
+/// ("Alger" lives inside "Algérie", which pinned a visa article to the capital).
+function foldFr(s) {
+  return String(s)
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/// Every wilaya named in French free text, matched on WORD BOUNDARIES.
+/// Used for press headlines and dgpc.dz posts, where a false match becomes a
+/// wrong incident pin on the map.
+export function wilayasInFrenchText(text, { max = 4 } = {}) {
+  const hay = ` ${foldFr(text)} `;
+  const found = new Map();
+  for (const w of WILAYAS) {
+    for (const name of [w.fr, ...(w.extraFr || [])]) {
+      const needle = foldFr(name);
+      if (needle.length < 4) continue; // too short to be unambiguous
+      if (hay.includes(` ${needle} `)) {
+        found.set(w.code, { code: w.code, fr: w.fr, ar: w.ar });
+        break;
+      }
+    }
+  }
+  return [...found.values()].slice(0, max);
+}

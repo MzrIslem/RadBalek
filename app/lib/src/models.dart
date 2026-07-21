@@ -67,6 +67,8 @@ class Incident {
   final double? lon;
   final double? mag;
   final String? observedAt;
+  final String? headlineFr; // press / dgpc.dz posts carry their own title
+  final String? link; // source article, for "lire la source"
 
   const Incident({
     required this.id,
@@ -83,6 +85,8 @@ class Incident {
     this.lon,
     this.mag,
     this.observedAt,
+    this.headlineFr,
+    this.link,
   });
 
   factory Incident.fromJson(Map<String, dynamic> j) => Incident(
@@ -102,6 +106,8 @@ class Incident {
         lon: (j['lon'] as num?)?.toDouble(),
         mag: (j['mag'] as num?)?.toDouble(),
         observedAt: j['observedAt'] as String?,
+        headlineFr: ((j['headline'] as Map?)?['fr'])?.toString(),
+        link: j['link'] as String?,
       );
 }
 
