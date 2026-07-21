@@ -99,10 +99,18 @@ Contributions are very welcome, especially:
 Please keep the safety-first principle: **an alert must never depend on a network call,
 a cloud API, or a permission the user might not have granted.**
 
+## Team
+
+Built by **[YoushopDZ](https://github.com/Krizotiros)** — an Algerian startup dev team.
+
+- **MzrIslem** — author & lead developer
+
+Made in Algeria 🇩🇿, for Algeria.
+
 ## Licence
 
-MIT — see [LICENSE](LICENSE). Data from the sources above remains under its own licence
-and must keep its attribution.
+MIT — see [LICENSE](LICENSE). Copyright © 2026 YoushopDZ. Data from the sources above
+remains under its own licence and must keep its attribution.
 
 ## Disclaimer
 
