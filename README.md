@@ -107,6 +107,12 @@ Built by **[YoushopDZ](https://github.com/Krizotiros)** — an Algerian startup 
 
 Made in Algeria 🇩🇿, for Algeria.
 
+## Security
+
+No secrets are committed to this repository — signing keys, service accounts and
+API tokens are gitignored and injected at runtime. See [SECURITY.md](SECURITY.md)
+for the vulnerability-disclosure policy, secret-management model and data handling.
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE). Copyright © 2026 YoushopDZ. Data from the sources above

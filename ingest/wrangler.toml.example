@@ -1,0 +1,18 @@
+# Copy to wrangler.toml and fill in your own Cloudflare KV namespace id
+# (create it with:  npx wrangler kv namespace create EWS_KV).
+name = "aisx-ews-ingest"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+# Poll every 10 minutes (free plan allows cron triggers).
+[triggers]
+crons = ["*/10 * * * *"]
+
+[[kv_namespaces]]
+binding = "EWS_KV"
+id = "YOUR_KV_NAMESPACE_ID"
+
+# Secrets are NOT stored here. Set them with `npx wrangler secret put NAME`:
+#   FIREBASE_SA      — Firebase service-account JSON (push)
+#   FIRMS_MAP_KEY    — NASA FIRMS key (satellite fires)
+#   GEMINI_API_KEY   — optional, AI assistant + report triage

@@ -30,3 +30,6 @@ app/.dart_tool/
 app/.gradle/
 build/
 .dart_tool/
+
+# Contains the real KV namespace id — use wrangler.toml.example as the template
+ingest/wrangler.toml
