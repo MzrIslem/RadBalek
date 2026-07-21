@@ -113,6 +113,10 @@ No secrets are committed to this repository — signing keys, service accounts a
 API tokens are gitignored and injected at runtime. See [SECURITY.md](SECURITY.md)
 for the vulnerability-disclosure policy, secret-management model and data handling.
 
+**Privacy:** built privacy-by-design, in line with **Loi n° 18-07** (Algeria's
+personal-data-protection law) and GDPR principles — minimal data, no account, no
+tracking, no third-party sharing. Details in [SECURITY.md](SECURITY.md#data-protection--loi-n-18-07-algérie--gdpr).
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE). Copyright © 2026 YoushopDZ. Data from the sources above

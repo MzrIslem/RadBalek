@@ -61,6 +61,28 @@ The app collects the minimum needed to deliver alerts:
 - **Citizen reports** — text, category and wilaya the user chooses to submit;
   no account or personal identifier is required.
 
+## Data protection — Loi n° 18-07 (Algérie) / GDPR
+
+Rad Balek is designed to comply with **Loi n° 18-07 du 10 juin 2018** relative à
+la protection des personnes physiques dans le traitement des données à caractère
+personnel — Algeria's personal-data-protection law — and follows the same
+principles as the EU GDPR (RGPD):
+
+- **Minimisation** — only data strictly necessary to deliver an alert is
+  processed (approximate wilaya + push token). Nothing else.
+- **Finalité (purpose limitation)** — data is used solely to deliver hazard
+  alerts. It is never sold, profiled, monetised, or shared with third parties.
+- **Anonymat** — no account, name, phone number or email is required to use the
+  app; citizen reports are anonymous.
+- **Consentement** — location and notification permissions are requested
+  explicitly, and the app still delivers national alerts without them.
+- **Droits de la personne** — a user can stop all processing at any time by
+  revoking a permission or uninstalling; no server-side profile persists.
+
+Rad Balek is an independent tool and is not a registered data controller with
+the ANPDP; this section states the privacy-by-design principles the project
+follows, not a formal certification.
+
 ## Supported versions
 
 Only the latest released version receives security fixes.
