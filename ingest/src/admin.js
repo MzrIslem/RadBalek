@@ -14,15 +14,42 @@ import { geminiGenerate } from "./ai.js";
 const json = (o, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }) });
 
-export async function handleAdminList(url, env) {
-  if (!env.ADMIN_KEY || url.searchParams.get("key") !== env.ADMIN_KEY) return json({ error: "forbidden" }, 403);
+// Audit fix: the admin key used to ride the URL query, where it leaks into
+// logs, browser history and referrers, with unlimited guesses. Now preferred
+// via Authorization: Bearer (query kept one release for compatibility), and
+// FAILED attempts are rate-limited per IP (10/h) — successful auths cost no
+// KV write.
+function adminKeyOf(request, url) {
+  const m = (request.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i);
+  return (m ? m[1] : url.searchParams.get("key")) || "";
+}
+
+async function adminAuthed(request, url, env) {
+  if (!env.ADMIN_KEY) return false;
+  const ip = request.headers.get("cf-connecting-ip") || "0";
+  const rlKey = `adminrl:${ip}`;
+  const fails = Number((await env.EWS_KV.get(rlKey)) || 0);
+  if (fails >= 10) return false;
+  if (adminKeyOf(request, url) === env.ADMIN_KEY) return true;
+  try {
+    await env.EWS_KV.put(rlKey, String(fails + 1), { expirationTtl: 3600 });
+  } catch {}
+  return false;
+}
+
+export async function handleAdminList(request, url, env) {
+  if (!(await adminAuthed(request, url, env))) return json({ error: "forbidden" }, 403);
   // ?kind=feedback lists app feedback (fb:) instead of hazard reports (r:).
   const prefix = url.searchParams.get("kind") === "feedback" ? "fb:" : "r:";
   const listed = await env.EWS_KV.list({ prefix, limit: 100 });
   const out = [];
   for (const k of listed.keys) {
     const raw = await env.EWS_KV.get(k.name);
-    if (raw) out.push(JSON.parse(raw));
+    if (raw) {
+      const item = JSON.parse(raw);
+      if (!item.id) item.id = k.name; // feedback rows carry no embedded id
+      out.push(item);
+    }
   }
   return json({ count: out.length, reports: out });
 }
@@ -34,7 +61,10 @@ export async function handleModerate(request, env) {
   } catch {
     return json({ error: "invalid json" }, 400);
   }
-  if (!env.ADMIN_KEY || b.key !== env.ADMIN_KEY) return json({ error: "forbidden" }, 403);
+  // Bearer header preferred; body key kept one release for compatibility.
+  const hdr = (request.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i);
+  const key = hdr ? hdr[1] : b.key;
+  if (!env.ADMIN_KEY || key !== env.ADMIN_KEY) return json({ error: "forbidden" }, 403);
   if (!["verified", "rejected"].includes(b.status)) return json({ error: "bad status" }, 400);
   const raw = await env.EWS_KV.get(String(b.id || ""));
   if (!raw) return json({ error: "not found" }, 404);

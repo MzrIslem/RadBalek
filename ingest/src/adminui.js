@@ -43,17 +43,28 @@ input{font:inherit;width:100%;padding:10px 14px;border-radius:12px;border:1px so
 <div id="app" class="hide">
   <h1>🛡️ Curation <span style="font-size:11px;color:var(--mut);font-weight:400" id="upd"></span></h1>
   <p class="sub">Vérifier = badge « vérifié » public · Rejeter = masqué. Gemini pré-trie (auto-ok / flagged) quand la clé est configurée.</p>
+  <div class="bar">
+    <button class="ghost" id="tabR" onclick="setTab('reports')">📋 Signalements</button>
+    <button class="ghost" id="tabF" onclick="setTab('feedback')">💬 Avis</button>
+  </div>
   <div class="bar" id="stats"></div>
   <div id="list"></div>
 </div>
 <script>
 const CATS={fire:"🔥 Feu",smoke:"💨 Fumée",road:"🚗 Route",flood:"🌊 Oued/Crue",animal:"🐾 Animal",heat:"🌡️ Chaleur",other:"ℹ️ Autre"};
+const FBT={bug:"🐞 Problème",idea:"💡 Idée",comment:"💬 Avis"};
 const NAMES={};
 let KEY=localStorage.getItem("rb_admin_key")||"";
+let TAB=localStorage.getItem("rb_admin_tab")||"reports";
+function setTab(t){TAB=t;localStorage.setItem("rb_admin_tab",t);boot()}
+// Key travels in the Authorization header only — never in the URL.
+const auth=()=>({headers:{authorization:"Bearer "+KEY}});
 function saveKey(){KEY=document.getElementById("key").value.trim();localStorage.setItem("rb_admin_key",KEY);boot()}
 async function boot(){
   if(!KEY)return;
-  const r=await fetch("/v1/admin/reports?key="+encodeURIComponent(KEY));
+  document.getElementById("tabR").style.background=TAB==="reports"?"var(--grnc)":"var(--s2)";
+  document.getElementById("tabF").style.background=TAB==="feedback"?"var(--grnc)":"var(--s2)";
+  const r=await fetch("/v1/admin/reports"+(TAB==="feedback"?"?kind=feedback":""),auth());
   if(r.status===403){localStorage.removeItem("rb_admin_key");alert("Clé invalide");return}
   document.getElementById("login").classList.add("hide");
   document.getElementById("app").classList.remove("hide");
@@ -61,10 +72,26 @@ async function boot(){
     try{(await (await fetch("/v1/wilayas.json")).json()).forEach(w=>NAMES[w.code]=w.fr)}catch(e){}
   }
   const data=await r.json();
+  if(TAB==="feedback"){paintFb(data.reports||[]);return}
   let snap=null,push=null;
   try{snap=await (await fetch("/v1/alerts.json?lite=1")).json()}catch(e){}
   try{push=await (await fetch("/v1/push-status.json")).json()}catch(e){}
   paint(data.reports||[],snap,push);
+}
+function paintFb(items){
+  const stars=n=>n?("★".repeat(n)+"☆".repeat(5-n)):"";
+  const avg=items.filter(f=>f.rating).reduce((s,f,_,a)=>s+f.rating/a.length,0);
+  document.getElementById("upd").textContent="· "+new Date().toLocaleTimeString("fr",{hour:"2-digit",minute:"2-digit"});
+  document.getElementById("stats").innerHTML=
+    '<span class="pill">💬 <b>'+items.length+'</b> avis</span>'+
+    (avg?'<span class="pill">⭐ moyenne <b>'+avg.toFixed(1)+'</b>/5</span>':"")+
+    '<span class="pill">🐞 <b>'+items.filter(f=>f.type==="bug").length+'</b> · 💡 <b>'+items.filter(f=>f.type==="idea").length+'</b></span>';
+  document.getElementById("list").innerHTML=items.map(f=>
+    '<div class="card"><div class="row"><div class="tx">'+
+    '<div class="t1">'+(FBT[f.type]||f.type)+(f.rating?' — <span style="color:#e2a500">'+stars(f.rating)+'</span>':"")+'</div>'+
+    '<div class="t2">'+new Date(f.at).toLocaleString("fr")+(f.version?' · v'+f.version:"")+(f.lang?' · '+f.lang:"")+
+    (f.text?'<br>« '+String(f.text).replace(/</g,"&lt;")+' »':"")+'</div>'+
+    '</div></div></div>').join("")||'<p class="sub">Aucun avis pour le moment.</p>';
 }
 function paint(reports,snap,push){
   const by={};reports.forEach(r=>by[r.status]=(by[r.status]||0)+1);
@@ -89,8 +116,9 @@ function paint(reports,snap,push){
     '</div></div></div>').join("")||'<p class="sub">Aucun signalement.</p>';
 }
 async function mod(id,status){
-  const r=await fetch("/v1/admin/moderate",{method:"POST",headers:{"content-type":"application/json"},
-    body:JSON.stringify({key:KEY,id:id,status:status})});
+  const r=await fetch("/v1/admin/moderate",{method:"POST",
+    headers:{"content-type":"application/json",authorization:"Bearer "+KEY},
+    body:JSON.stringify({id:id,status:status})});
   if(r.ok)boot();else alert("Échec: "+r.status);
 }
 boot();

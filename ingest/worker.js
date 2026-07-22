@@ -103,7 +103,7 @@ export default {
     }
     if (path === "/admin")
       return new Response(ADMIN_HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
-    if (path === "/v1/admin/reports") return handleAdminList(url, env);
+    if (path === "/v1/admin/reports") return handleAdminList(req, url, env);
     if (path === "/v1/admin/moderate" && req.method === "POST") return handleModerate(req, env);
     if (path === "/v1/test-push" && req.method === "POST") return handleTestPush(req, env, ctx);
     // EFFIS Fire Weather Index forecast raster over Algeria, cached per day.
