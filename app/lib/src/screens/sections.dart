@@ -28,7 +28,16 @@ class _SectionScaffold extends StatelessWidget {
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Opacity(opacity: .18, child: Image.asset('assets/logo.png', width: 96, height: 96)),
                 const SizedBox(height: 18),
-                const CircularProgressIndicator(),
+                if (st.sourceStatus != 'offline') const CircularProgressIndicator() else ...[
+                  Text(S.t(st.lang, 'load_fail'),
+                      style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  const SizedBox(height: 10),
+                  FilledButton.tonalIcon(
+                    onPressed: () => st.refresh(force: true),
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: Text(S.t(st.lang, 'retry')),
+                  ),
+                ],
               ]),
             )
           : RefreshIndicator(

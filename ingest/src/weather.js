@@ -37,13 +37,20 @@ export async function handleWeather(env, geo) {
     fetch(aqUrl, { headers: { "user-agent": "radbalek/0.1" } }).catch(() => null),
   ]);
   if (!res.ok) return new Response('{"error":"upstream"}', { status: 502, headers: { "access-control-allow-origin": "*" } });
-  const data = await res.json();
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    return new Response('{"error":"upstream body"}', { status: 502, headers: { "access-control-allow-origin": "*" } });
+  }
   const arr = Array.isArray(data) ? data : [data];
   let aqArr = [];
-  if (aqRes && aqRes.ok) {
-    const aq = await aqRes.json();
-    aqArr = Array.isArray(aq) ? aq : [aq];
-  }
+  try {
+    if (aqRes && aqRes.ok) {
+      const aq = await aqRes.json();
+      aqArr = Array.isArray(aq) ? aq : [aq];
+    }
+  } catch {} // air quality is enrichment — never fail weather over it
   // European AQI bands → our color tiers.
   const aqBand = (v) => (v == null ? null : v <= 20 ? "good" : v <= 40 ? "fair" : v <= 60 ? "moderate" : v <= 80 ? "poor" : "veryPoor");
   // Rule-based 48h trend (no ML): compare today's feels-like max to the peak

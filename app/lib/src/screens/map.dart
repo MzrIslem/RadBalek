@@ -43,6 +43,17 @@ class _MapScreenState extends State<MapScreen> {
   List<_WilayaShape>? _shapes;
   Object? _shapesFrom;
 
+  // Scene cache: polygon/marker lists are rebuilt ONLY when their inputs
+  // change — not on every 0.2-zoom setState, which used to reconstruct all 58
+  // wilaya polygons + markers per tick and made pan/zoom janky.
+  String? _sceneKey;
+  List<Polygon> _scenePolys = const [];
+  List<CircleMarker> _sceneFires = const [];
+  List<CircleMarker> _sceneQuakes = const [];
+  List<Marker> _sceneBadges = const [];
+  List<Marker> _sceneLabels = const [];
+  List<Marker> _sceneTemps = const [];
+
   void _buildShapes(Map<String, dynamic> geo) {
     if (identical(_shapesFrom, geo)) return;
     final out = <_WilayaShape>[];
@@ -195,6 +206,19 @@ class _MapScreenState extends State<MapScreen> {
     final cs = Theme.of(context).colorScheme;
     if (geo == null || snap == null) {
       st.loadBoundaries();
+      if (st.sourceStatus == 'offline') {
+        return Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(S.t(lang, 'load_fail'), style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
+            const SizedBox(height: 10),
+            FilledButton.tonalIcon(
+              onPressed: () => st.refresh(force: true),
+              icon: const Icon(Icons.refresh, size: 18),
+              label: Text(S.t(lang, 'retry')),
+            ),
+          ]),
+        );
+      }
       return const Center(child: CircularProgressIndicator());
     }
     _buildShapes(geo);
@@ -225,108 +249,169 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
 
-    final polygons = <Polygon>[
-      // approx/gb fillers paint borderless & fainter (rough edges), ONM on top.
-      for (final s in shapes)
-        for (final ring in s.rings)
-          Polygon(
-            points: ring,
-            color: vectorLayer
-                ? fillFor(s.code).withValues(alpha: (s.gb || s.approx) ? .28 : .45)
-                : Colors.transparent,
-            borderColor: s.code == _selected
-                ? cs.onSurface
-                : (s.gb || s.approx)
-                ? Colors.transparent
-                : (st.dark
-                      ? Colors.black.withValues(alpha: .5)
-                      : Colors.white.withValues(alpha: .95)),
-            borderStrokeWidth: s.code == _selected ? 3 : ((s.gb || s.approx) ? 0 : 1.2),
-          ),
-    ];
+    final sceneKey =
+        '${identityHashCode(geo)}:${identityHashCode(snap)}:${identityHashCode(st.weather)}:$_layer:${st.dark}:$_selected:$lang';
+    if (sceneKey != _sceneKey) {
+      _sceneKey = sceneKey;
 
-    final fireDots = <CircleMarker>[
-      if (_layer == 'vig' || _layer == 'fire')
-        for (final i in snap.incidents)
-          // wilayas.isNotEmpty filters out real fires beyond our borders
-          // (the FIRMS bbox overlaps Tunisia/Libya) — they're not ours to map.
-          if (i.source == 'firms' &&
-              !i.possibleIndustrial &&
-              i.wilayas.isNotEmpty &&
-              i.lat != null &&
-              i.lon != null)
-            CircleMarker(
-              point: LatLng(i.lat!, i.lon!),
-              radius: (3 + i.detections * .3).clamp(3, 10).toDouble(),
-              color: vigilance(
-                'red',
-                st.dark,
-              ).solid.withValues(alpha: i.corroborated ? .95 : .55),
-              borderColor: Colors.white,
-              borderStrokeWidth: .6,
+      _scenePolys = <Polygon>[
+        // approx/gb fillers paint borderless & fainter (rough edges), ONM on top.
+        for (final s in shapes)
+          for (final ring in s.rings)
+            Polygon(
+              points: ring,
+              color: vectorLayer
+                  ? fillFor(s.code).withValues(alpha: (s.gb || s.approx) ? .28 : .45)
+                  : Colors.transparent,
+              borderColor: s.code == _selected
+                  ? cs.onSurface
+                  : (s.gb || s.approx)
+                  ? Colors.transparent
+                  : (st.dark
+                        ? Colors.black.withValues(alpha: .5)
+                        : Colors.white.withValues(alpha: .95)),
+              borderStrokeWidth: s.code == _selected ? 3 : ((s.gb || s.approx) ? 0 : 1.2),
             ),
-    ];
+      ];
 
-    final quakeDots = <CircleMarker>[
-      if (_layer == 'vig' || _layer == 'quake')
-        for (final q in snap.incidents)
-          if (q.hazard == 'quake' && q.lat != null && q.lon != null)
-            CircleMarker(
-              point: LatLng(q.lat!, q.lon!),
-              radius: (4 + (q.mag ?? 3) * 1.6).clamp(6, 16).toDouble(),
-              color: Colors.deepPurple.withValues(alpha: .8),
-              borderColor: Colors.white,
-              borderStrokeWidth: 1,
-            ),
-    ];
+      _sceneFires = <CircleMarker>[
+        if (_layer == 'vig' || _layer == 'fire')
+          for (final i in snap.incidents)
+            // wilayas.isNotEmpty filters out real fires beyond our borders
+            // (the FIRMS bbox overlaps Tunisia/Libya) — they're not ours to map.
+            if (i.source == 'firms' &&
+                !i.possibleIndustrial &&
+                i.wilayas.isNotEmpty &&
+                i.lat != null &&
+                i.lon != null)
+              CircleMarker(
+                point: LatLng(i.lat!, i.lon!),
+                radius: (3 + i.detections * .3).clamp(3, 10).toDouble(),
+                color: vigilance(
+                  'red',
+                  st.dark,
+                ).solid.withValues(alpha: i.corroborated ? .95 : .55),
+                borderColor: Colors.white,
+                borderStrokeWidth: .6,
+              ),
+      ];
 
-    final pcOngoing = snap.incidents
-        .where((i) => i.source == 'dgpc-telegram' && i.status == 'ongoing')
-        .expand((i) => i.wilayas.map((w) => w.code))
-        .toSet();
-    // Anchor each wilaya's fire badge to its strongest satellite cluster
-    // (the actual fire front); centroid only as fallback.
-    final bestFire = <int, LatLng>{};
-    final bestDet = <int, int>{};
-    for (final i in snap.incidents) {
-      if (i.source != 'firms' ||
-          i.possibleIndustrial ||
-          i.lat == null ||
-          i.lon == null) {
-        continue;
-      }
-      for (final w in i.wilayas) {
-        if (i.detections > (bestDet[w.code] ?? 0)) {
-          bestDet[w.code] = i.detections;
-          bestFire[w.code] = LatLng(i.lat!, i.lon!);
+      _sceneQuakes = <CircleMarker>[
+        if (_layer == 'vig' || _layer == 'quake')
+          for (final q in snap.incidents)
+            if (q.hazard == 'quake' && q.lat != null && q.lon != null)
+              CircleMarker(
+                point: LatLng(q.lat!, q.lon!),
+                radius: (4 + (q.mag ?? 3) * 1.6).clamp(6, 16).toDouble(),
+                color: Colors.deepPurple.withValues(alpha: .8),
+                borderColor: Colors.white,
+                borderStrokeWidth: 1,
+              ),
+      ];
+
+      final pcOngoing = snap.incidents
+          .where((i) => i.source == 'dgpc-telegram' && i.status == 'ongoing')
+          .expand((i) => i.wilayas.map((w) => w.code))
+          .toSet();
+      // Anchor each wilaya's fire badge to its strongest satellite cluster
+      // (the actual fire front); centroid only as fallback.
+      final bestFire = <int, LatLng>{};
+      final bestDet = <int, int>{};
+      for (final i in snap.incidents) {
+        if (i.source != 'firms' ||
+            i.possibleIndustrial ||
+            i.lat == null ||
+            i.lon == null) {
+          continue;
+        }
+        for (final w in i.wilayas) {
+          if (i.detections > (bestDet[w.code] ?? 0)) {
+            bestDet[w.code] = i.detections;
+            bestFire[w.code] = LatLng(i.lat!, i.lon!);
+          }
         }
       }
-    }
-    final badges = <Marker>[
-      if (_layer == 'vig' || _layer == 'fire')
-        for (final s in shapes)
-          if (pcOngoing.contains(s.code) && !s.gb)
-            Marker(
-              point: bestFire[s.code] ?? s.centroid,
-              width: 26,
-              height: 26,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: vigilance('orange', st.dark).container,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: vigilance('orange', st.dark).solid,
-                    width: 2,
+      _sceneBadges = <Marker>[
+        if (_layer == 'vig' || _layer == 'fire')
+          for (final s in shapes)
+            if (pcOngoing.contains(s.code) && !s.gb)
+              Marker(
+                point: bestFire[s.code] ?? s.centroid,
+                width: 26,
+                height: 26,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: vigilance('orange', st.dark).container,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: vigilance('orange', st.dark).solid,
+                      width: 2,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.local_fire_department,
+                    size: 15,
+                    color: vigilance('orange', st.dark).onContainer,
                   ),
                 ),
-                child: Icon(
-                  Icons.local_fire_department,
-                  size: 15,
-                  color: vigilance('orange', st.dark).onContainer,
+              ),
+      ];
+
+      _sceneLabels = <Marker>[
+        for (final s in shapes)
+          if (!s.gb)
+            Marker(
+              point: s.centroid,
+              width: 110,
+              height: 18,
+              child: IgnorePointer(
+                child: Text(
+                  st.wilayaName(s.code),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                    shadows: [
+                      Shadow(color: cs.surface, blurRadius: 3),
+                      Shadow(color: cs.surface, blurRadius: 6),
+                    ],
+                  ),
                 ),
               ),
             ),
-    ];
+      ];
+
+      _sceneTemps = <Marker>[
+        if (_layer == 't')
+          for (final s in shapes)
+            if (!s.gb && st.weather[s.code]?['t'] != null)
+              Marker(
+                point: s.centroid,
+                width: 46,
+                height: 20,
+                child: IgnorePointer(
+                  child: Container(
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: cs.surface.withValues(alpha: .78),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${(st.weather[s.code]!['t'] as num).round()}°',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: cs.onSurface),
+                    ),
+                  ),
+                ),
+              ),
+      ];
+    }
+    final polygons = _scenePolys;
+    final fireDots = _sceneFires;
+    final quakeDots = _sceneQuakes;
+    final badges = _sceneBadges;
 
     // Open the map focused on the user's wilaya (their GPS wilaya, else first
     // subscribed) instead of the whole country.
@@ -403,62 +488,11 @@ class _MapScreenState extends State<MapScreen> {
               CircleLayer(circles: fireDots),
               CircleLayer(circles: quakeDots),
               MarkerLayer(markers: badges),
-              // Wilaya labels appear once zoomed in enough to read them.
-              if (_zoom >= 6.0)
-                MarkerLayer(
-                  markers: [
-                    for (final s in shapes)
-                      if (!s.gb)
-                        Marker(
-                          point: s.centroid,
-                          width: 110,
-                          height: 18,
-                          child: IgnorePointer(
-                            child: Text(
-                              st.wilayaName(s.code),
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w700,
-                                color: cs.onSurface,
-                                shadows: [
-                                  Shadow(color: cs.surface, blurRadius: 3),
-                                  Shadow(color: cs.surface, blurRadius: 6),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                  ],
-                ),
+              // Wilaya labels appear once zoomed in enough to read them
+              // (cached — only the visibility toggles with zoom).
+              if (_zoom >= 6.0) MarkerLayer(markers: _sceneLabels),
               // Temperature values shown directly on the map (Chaleur layer).
-              if (_layer == 't')
-                MarkerLayer(
-                  markers: [
-                    for (final s in shapes)
-                      if (!s.gb && st.weather[s.code]?['t'] != null)
-                        Marker(
-                          point: s.centroid,
-                          width: 46,
-                          height: 20,
-                          child: IgnorePointer(
-                            child: Container(
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: cs.surface.withValues(alpha: .78),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                '${(st.weather[s.code]!['t'] as num).round()}°',
-                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: cs.onSurface),
-                              ),
-                            ),
-                          ),
-                        ),
-                  ],
-                ),
+              if (_layer == 't') MarkerLayer(markers: _sceneTemps),
               RichAttributionWidget(
                 attributions: [
                   TextSourceAttribution(

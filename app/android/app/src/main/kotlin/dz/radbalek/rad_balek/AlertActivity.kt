@@ -112,15 +112,21 @@ class AlertActivity : Activity() {
             lp.topMargin = dp(10); layoutParams = lp
             setOnClickListener { onClick() }
         }
-        root.addView(bigBtn("📞  APPELER LE 14", "#FFFFFF", "#B3120E") {
+        // Localize the action buttons by the user's in-app language (the
+        // lockscreen face was French-only regardless of setting).
+        val isAr = try {
+            getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                .getString("flutter.rb_lang", "fr") == "ar"
+        } catch (_: Exception) { false }
+        root.addView(bigBtn(if (isAr) "📞  اتصل بالرقم 14" else "📞  APPELER LE 14", "#FFFFFF", "#B3120E") {
             startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:14")))
         })
-        root.addView(bigBtn("Voir les consignes", "#7A0C0A", "#FFFFFF") {
+        root.addView(bigBtn(if (isAr) "عرض التعليمات" else "Voir les consignes", "#7A0C0A", "#FFFFFF") {
             stopAll()
             startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             finish()
         })
-        root.addView(bigBtn("Arrêter la sirène", "#7A0C0A", "#FFDAD6") { stopAll(); finish() })
+        root.addView(bigBtn(if (isAr) "إيقاف صفارة الإنذار" else "Arrêter la sirène", "#7A0C0A", "#FFDAD6") { stopAll(); finish() })
         return root
     }
 

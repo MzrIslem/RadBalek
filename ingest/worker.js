@@ -160,13 +160,19 @@ export default {
     }
 
     if (path === "/v1/history.json") {
-      const listed = await env.EWS_KV.list({ prefix: "s:", limit: 168 }); // last 7 days hourly
-      const out = [];
-      for (const k of listed.keys) {
-        const raw = await env.EWS_KV.get(k.name);
-        if (raw) out.push(JSON.parse(raw));
+      // Single rolled-up doc (1 get) — the old list+168-gets fan-out remains
+      // only as a one-time fallback until the first hourly cron after deploy.
+      let body = await env.EWS_KV.get("history:doc");
+      if (!body) {
+        const listed = await env.EWS_KV.list({ prefix: "s:", limit: 168 });
+        const out = [];
+        for (const k of listed.keys) {
+          const raw = await env.EWS_KV.get(k.name);
+          if (raw) out.push(JSON.parse(raw));
+        }
+        body = JSON.stringify(out);
       }
-      return store(new Response(JSON.stringify(out), {
+      return store(new Response(body, {
         headers: corsHeaders({ "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=300" }),
       }));
     }
@@ -197,12 +203,15 @@ async function refresh(env, doPush = false) {
   const now = new Date(snap.generatedAt);
   if (now.getUTCMinutes() < 10) {
     const inv = String(10_000_000_000_000 - now.getTime()).padStart(14, "0");
+    const entry = { at: snap.generatedAt, stats: snap.stats, reds: snap.alerts.filter((a) => a.color === "red").map((a) => ({ hazard: a.hazard, wilayas: a.wilayas.map((w) => w.code) })) };
     try {
-      await env.EWS_KV.put(
-        `s:${inv}`,
-        JSON.stringify({ at: snap.generatedAt, stats: snap.stats, reds: snap.alerts.filter((a) => a.color === "red").map((a) => ({ hazard: a.hazard, wilayas: a.wilayas.map((w) => w.code) })) }),
-        { expirationTtl: 60 * 60 * 24 * 365 }
-      );
+      await env.EWS_KV.put(`s:${inv}`, JSON.stringify(entry), { expirationTtl: 60 * 60 * 24 * 365 });
+    } catch {}
+    // Rolled-up 7-day doc so /v1/history.json costs 1 get, not list+168 gets.
+    try {
+      const doc = JSON.parse((await env.EWS_KV.get("history:doc")) || "[]");
+      if (!doc.length || doc[0].at !== entry.at) doc.unshift(entry);
+      await env.EWS_KV.put("history:doc", JSON.stringify(doc.slice(0, 168)), { expirationTtl: 60 * 60 * 24 * 30 });
     } catch {}
   }
   // Push new orange/red alerts to FCM topics (no-op until FIREBASE_SA secret exists).

@@ -123,5 +123,9 @@ function statusAr(s) {
 // subscribed wilayas.
 export function fcmTopicsFor(item) {
   if (item.class !== "alert") return [];
+  // Yellow is never pushed (in-app only) — emitting its topics put them into
+  // the active-topics set, so a yellow EXPIRING sent a "✅ Fin d'alerte" for an
+  // alert users were never notified about.
+  if (item.color === "yellow") return [];
   return item.wilayas.map((w) => `w${w.code}_${item.hazard}_${item.color}`);
 }

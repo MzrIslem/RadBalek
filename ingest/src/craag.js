@@ -23,7 +23,12 @@ const UA = "Mozilla/5.0 (compatible; radbalek/0.2)";
 export async function fetchCraag(fetchFn = fetch) {
   const res = await fetchFn(LIST_URL, { headers: { "user-agent": UA } });
   if (!res.ok) throw new Error(`CRAAG HTTP ${res.status}`);
-  return parseCraag(await res.text());
+  const html = await res.text();
+  const rows = parseCraag(html);
+  // A 200 page with zero parsed rows means the markup drifted — surface it in
+  // errors[] instead of silently losing official attribution forever.
+  if (!rows.length && html.length > 5000) throw new Error("CRAAG: 0 rows parsed (markup drift?)");
+  return rows;
 }
 
 export function parseCraag(html) {

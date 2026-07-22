@@ -20,7 +20,7 @@ class AppState extends ChangeNotifier {
   final Api api;
   final bool autoRefresh;
 
-  static const appVersion = '0.9.6'; // keep in sync with pubspec version
+  static const appVersion = '0.9.7'; // keep in sync with pubspec version
 
   String lang = 'fr';
   bool dark = false;
@@ -344,12 +344,20 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadBoundaries() async {
-    if (boundaries != null) return;
-    try {
-      boundaries = await api.fetchBoundaries();
-      notifyListeners();
-    } catch (_) {}
+  Future<void>? _boundariesInflight;
+
+  Future<void> loadBoundaries() {
+    if (boundaries != null) return Future.value();
+    // Single-flight: refresh() and MapScreen.build both call this — without the
+    // guard they raced and downloaded the (large) geojson twice.
+    return _boundariesInflight ??= () async {
+      try {
+        boundaries = await api.fetchBoundaries();
+        notifyListeners();
+      } catch (_) {} finally {
+        _boundariesInflight = null;
+      }
+    }();
   }
 
   Future<void> _persist() async {
@@ -395,11 +403,33 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool _topicsBusy = false;
+  bool _topicsDirty = false;
+
   /// Subscribes FCM topics `w{code}_{hazard}_{color}` for every subscribed
   /// wilaya: red always on; orange follows the per-hazard preference.
   /// Diffs against the previously synced set so removals unsubscribe cleanly.
+  /// Serialized: concurrent callers (toggleWilaya + locate + onboarding) used
+  /// to interleave the read-modify-write of rb_topics and drift subscriptions.
   Future<void> syncTopics() async {
     if (!_fcmReady) return;
+    if (_topicsBusy) {
+      _topicsDirty = true; // re-run once the current sync finishes
+      return;
+    }
+    _topicsBusy = true;
+    try {
+      await _syncTopicsOnce();
+    } finally {
+      _topicsBusy = false;
+      if (_topicsDirty) {
+        _topicsDirty = false;
+        unawaited(syncTopics());
+      }
+    }
+  }
+
+  Future<void> _syncTopicsOnce() async {
     final desired = <String>{};
     for (final code in {...myWilayas, ?hereWilaya}) {
       for (final h in notif.keys) {

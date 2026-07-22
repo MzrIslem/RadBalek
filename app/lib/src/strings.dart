@@ -198,6 +198,11 @@ class S {
       'imp_sandstorm': 'Visibilité fortement réduite, air chargé de poussière.',
       'imp_flood': 'Pluies intenses avec risque de crues d’oueds et d’inondations soudaines.',
       'imp_cold': 'Froid intense, verglas et neige possibles.',
+      'imp_fire': 'Feu de forêt actif — fumées, propagation possible vers les habitations.',
+      'imp_road': 'Danger sur la route — accident ou obstacle signalé.',
+      'imp_other': 'Situation dangereuse signalée — suivez les consignes des autorités.',
+      'retry': 'Réessayer',
+      'load_fail': 'Connexion impossible pour le moment.',
     },
     'en': {
       'app': 'Rad Balek',
@@ -393,6 +398,11 @@ class S {
       'imp_sandstorm': 'Severely reduced visibility, dust-loaded air.',
       'imp_flood': 'Heavy rain with risk of flash floods and oued overflows.',
       'imp_cold': 'Severe cold, black ice and snow possible.',
+      'imp_fire': 'Active wildfire — smoke, possible spread toward homes.',
+      'imp_road': 'Road danger — accident or obstacle reported.',
+      'imp_other': 'Dangerous situation reported — follow official instructions.',
+      'retry': 'Retry',
+      'load_fail': 'Cannot connect right now.',
     },
     'ar': {
       'app': 'رد بالك',
@@ -587,6 +597,11 @@ class S {
       'imp_sandstorm': 'انخفاض شديد في الرؤية وهواء محمّل بالغبار.',
       'imp_flood': 'أمطار غزيرة مع خطر فيضان الوديان والسيول المفاجئة.',
       'imp_cold': 'برد قارس مع احتمال الجليد والثلوج.',
+      'imp_fire': 'حريق غابة نشط — دخان واحتمال امتداد نحو المساكن.',
+      'imp_road': 'خطر على الطريق — حادث أو عائق مبلغ عنه.',
+      'imp_other': 'وضع خطير مبلغ عنه — اتبعوا تعليمات السلطات.',
+      'retry': 'أعد المحاولة',
+      'load_fail': 'تعذّر الاتصال حاليًا.',
     },
   };
 

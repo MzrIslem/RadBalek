@@ -28,11 +28,23 @@ class HomeScreen extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     if (snap == null) {
       // Watermark: the Signal Khamsa "watching over you" while data loads.
+      // Audit fix: a failed first load used to leave a spinner forever with no
+      // way out — fatal on a weak network, which is when an EWS matters most.
+      final failed = st.sourceStatus == 'offline';
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Opacity(opacity: .18, child: Image.asset('assets/logo.png', width: 120, height: 120)),
           const SizedBox(height: 20),
-          const CircularProgressIndicator(),
+          if (!failed) const CircularProgressIndicator() else ...[
+            Text(S.t(lang, 'load_fail'),
+                style: TextStyle(fontSize: 13.5, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: () => st.refresh(force: true),
+              icon: const Icon(Icons.refresh, size: 18),
+              label: Text(S.t(lang, 'retry')),
+            ),
+          ],
         ]),
       );
     }

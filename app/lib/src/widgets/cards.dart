@@ -383,9 +383,14 @@ class _ConfirmButtonState extends State<ConfirmButton> {
           ? null
           : () async {
               final n = await context.read<AppState>().confirm(widget.id);
+              if (!mounted) return;
+              // Audit fix: failure used to lock the button as if it succeeded —
+              // stay enabled so the user can retry when the network returns.
               setState(() {
-                _done = true;
-                if (n != null) _n = n;
+                if (n != null) {
+                  _done = true;
+                  _n = n;
+                }
               });
             },
       style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10), minimumSize: const Size(0, 32)),
