@@ -18,6 +18,7 @@ import {
   handleConfirmReport,
   handleListReports,
   handleExportCsv,
+  handleFeedback,
 } from "./src/reports.js";
 import { handleAdminList, handleModerate, handleTestPush, triageReport, liteSnapshot } from "./src/admin.js";
 import { ADMIN_HTML } from "./src/adminui.js";
@@ -41,21 +42,34 @@ export default {
     // the full URL, so ?lite=1 caches separately from the full snapshot.
     const CACHE_TTL = {
       "/v1/alerts.json": 120,
-      "/v1/reports.json": 60, // kills the list+N-gets fan-out per app open
+      "/v1/reports.json": 120, // >=86.4s = under the 1k/day list quota alone
+      "/v1/reports.csv": 300, // 1 list + up to 1000 gets — must be cached
       "/v1/history.json": 300, // kills the 168-get burst per history open
       "/v1/weather.json": 600,
       "/v1/fwi.png": 10800,
+      "/v1/app.json": 900,
     };
     const cacheable = req.method === "GET" && CACHE_TTL[path];
+    // Normalized cache key: pathname + only real params (lite/limit). A junk
+    // param (?x=random) no longer bypasses the cache into a KV list+N-get miss,
+    // which would drain the free-tier read/list budget (a free-tier DoS).
+    const cacheKey = (() => {
+      const keep = new URLSearchParams();
+      if (url.searchParams.get("lite")) keep.set("lite", "1");
+      const lim = url.searchParams.get("limit");
+      if (lim && /^\d{1,3}$/.test(lim)) keep.set("limit", lim);
+      const q = keep.toString();
+      return `https://c${path}${q ? "?" + q : ""}`;
+    })();
     if (cacheable) {
-      const hit = await caches.default.match(req.url);
+      const hit = await caches.default.match(cacheKey);
       if (hit) return hit;
     }
     const store = (resp) => {
       if (cacheable && resp.status === 200) {
         const copy = new Response(resp.clone().body, resp);
         copy.headers.set("cache-control", `public, max-age=${CACHE_TTL[path]}`);
-        ctx.waitUntil(caches.default.put(req.url, copy));
+        ctx.waitUntil(caches.default.put(cacheKey, copy));
       }
       return resp;
     };
@@ -118,9 +132,25 @@ export default {
       return new Response(JSON.stringify(geo), {
         headers: corsHeaders({ "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=86400" }),
       });
+    // In-app update check: normalizes the latest GitHub release. Publishing a
+    // release on GitHub is the ONLY step — every app learns about it within
+    // ~30 min (edge cache) with zero server-side bookkeeping.
+    if (path === "/v1/app.json") {
+      // Latest-release info lives in KV (github.com blocks Worker-egress
+      // fetches, and /releases/latest skips pre-releases anyway). Updated at
+      // release time with one command:
+      //   npx wrangler kv key put "app:latest" '{"version":...}' --namespace-id=<EWS_KV> --remote
+      const raw = await env.EWS_KV.get("app:latest");
+      return store(new Response(raw || "{}", {
+        headers: corsHeaders({ "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=900" }),
+      }));
+    }
+    // App feedback (bugs / ideas / reviews about the app itself — distinct
+    // from hazard reports). Private to the admin page, not a public feed.
+    if (path === "/v1/feedback" && req.method === "POST") return handleFeedback(req, env);
     if (path === "/v1/reports/confirm" && req.method === "POST") return handleConfirmReport(req, env);
     if (path === "/v1/reports.json") return store(await handleListReports(url, env));
-    if (path === "/v1/reports.csv") return handleExportCsv(env);
+    if (path === "/v1/reports.csv") return store(await handleExportCsv(env));
 
     if (path === "/v1/push-status.json") {
       const raw = (await env.EWS_KV.get("push:last")) || '{"neverRan":true}';

@@ -14,6 +14,31 @@ String hhmm(String? iso) {
   return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 }
 
+/// Full timestamp + relative age: "21/07 · 14:30 · il y a 2 h" (localized).
+/// Used where provenance matters (press / official field posts).
+String stampAgo(String? iso, String lang) {
+  if (iso == null || iso.isEmpty) return '';
+  final d = DateTime.tryParse(iso)?.toLocal();
+  if (d == null) return '';
+  final dm = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
+  final hm = '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  final diff = DateTime.now().difference(d);
+  final String rel;
+  if (diff.isNegative || diff.inMinutes < 1) {
+    rel = switch (lang) { 'ar' => 'الآن', 'en' => 'just now', _ => "à l'instant" };
+  } else if (diff.inMinutes < 60) {
+    final n = diff.inMinutes;
+    rel = switch (lang) { 'ar' => 'منذ $n د', 'en' => '$n min ago', _ => 'il y a $n min' };
+  } else if (diff.inHours < 24) {
+    final n = diff.inHours;
+    rel = switch (lang) { 'ar' => 'منذ $n س', 'en' => '$n h ago', _ => 'il y a $n h' };
+  } else {
+    final n = diff.inDays;
+    rel = switch (lang) { 'ar' => 'منذ $n ي', 'en' => '$n d ago', _ => 'il y a $n j' };
+  }
+  return '$dm · $hm · $rel';
+}
+
 String wLabel(AppState st, List<Wilaya> ws) {
   if (ws.isEmpty) return st.lang == 'ar' ? 'الجزائر' : 'Algérie';
   return ws.map((w) => st.lang == 'ar' ? 'ولاية ${w.ar}' : w.fr).join('، ');
@@ -289,8 +314,8 @@ void showReportSheet(BuildContext context, AppState st) {
                         ? null
                         : () async {
                             setSt(() => sending = true);
-                            final ok = await st.sendReport(category: category!, wilaya: wilaya, description: desc.text);
-                            if (ok) {
+                            final res = await st.sendReport(category: category!, wilaya: wilaya, description: desc.text);
+                            if (res == 'ok') {
                               setSt(() => done = true);
                               Future.delayed(const Duration(milliseconds: 1600), () {
                                 if (ctx.mounted) Navigator.of(ctx).pop();
@@ -298,7 +323,8 @@ void showReportSheet(BuildContext context, AppState st) {
                             } else {
                               setSt(() => sending = false);
                               if (ctx.mounted) {
-                                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(S.t(lang, 'rep_err'))));
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                    SnackBar(content: Text(S.t(lang, res == 'rate' ? 'rep_rate' : 'rep_err'))));
                               }
                             }
                           },

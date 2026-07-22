@@ -69,6 +69,8 @@ class RbMessagingService : FlutterFirebaseMessagingService() {
             .putExtra("body", body)
             .putExtra("where", d["wilayas"]?.takeIf { it.isNotBlank() }?.let { "Wilaya(s): $it" } ?: "")
             .putExtra("alertId", d["alertId"] ?: "red")
+            .putExtra("spoken_fr", d["spoken_fr"] ?: title)
+            .putExtra("spoken_ar", d["spoken_ar"] ?: body)
         val fsi = PendingIntent.getActivity(
             this, 1001, alertIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE

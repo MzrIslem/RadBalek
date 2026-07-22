@@ -20,6 +20,8 @@ class AppState extends ChangeNotifier {
   final Api api;
   final bool autoRefresh;
 
+  static const appVersion = '0.9.6'; // keep in sync with pubspec version
+
   String lang = 'fr';
   bool dark = false;
   List<int> myWilayas = [16, 6];
@@ -39,7 +41,9 @@ class AppState extends ChangeNotifier {
   List<String> family = []; // SMS recipients for the I'm-safe button
   List<String> sosNumbers = ['14', '17', '1055']; // customizable SOS row
   bool voiceAlerts = true; // spoken red-alert announcements (AR+FR)
-  String? _voicedId; // last alert announced — speak each red only once
+  // Auto-announce is now native (AlertActivity fires it WITH the siren, even on
+  // a locked screen). Dart VoiceAlert stays only for the in-app replay button
+  // and the settings sample.
 
   void toggleVoice() {
     voiceAlerts = !voiceAlerts;
@@ -71,17 +75,6 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
-  /// Voice a new red alert for my zone — once per alert id. Fires on refresh,
-  /// which covers foreground FCM arrival, app resume, and cold open.
-  Future<void> _maybeAnnounce() async {
-    if (!voiceAlerts || kIsWeb) return;
-    final a = redMine;
-    if (a == null || a.id == _voicedId) return;
-    _voicedId = a.id;
-    SharedPreferences.getInstance().then((p) => p.setString('rb_voiced', a.id));
-    final my = {...myWilayas, ?hereWilaya};
-    await VoiceAlert.announce(a, myCodes: my, lang: lang);
-  }
 
   Map<String, String> contactNames = {}; // number -> display name (from picker)
 
@@ -174,7 +167,6 @@ class AppState extends ChangeNotifier {
     family = p.getStringList('rb_family') ?? [];
     sosNumbers = p.getStringList('rb_sos') ?? ['14', '17', '1055'];
     voiceAlerts = p.getBool('rb_voice') ?? true;
-    _voicedId = p.getString('rb_voiced');
     contactNames = {
       for (final e in p.getStringList('rb_names') ?? const <String>[])
         if (e.contains('|')) e.substring(0, e.indexOf('|')): e.substring(e.indexOf('|') + 1),
@@ -242,28 +234,86 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> refresh() async {
-    try {
-      final raw = await api.fetchSnapshotRaw();
-      snapshot = Snapshot.fromJson(jsonDecode(raw) as Map<String, dynamic>);
-      sourceStatus = 'live';
-      SharedPreferences.getInstance().then((p) => p.setString('rb_cache', raw));
-    } catch (_) {
-      if (sourceStatus != 'cached') sourceStatus = 'offline';
+  DateTime? _lastRefresh;
+  DateTime? _lastWeather;
+  bool _refreshing = false;
+
+  /// [force] bypasses the throttle (pull-to-refresh). Auto-refresh on resume
+  /// is throttled to 60s (audit: every resume re-fetched everything + GPS).
+  Future<void> refresh({bool force = false}) async {
+    if (_refreshing) return; // single-flight
+    if (!force && _lastRefresh != null &&
+        DateTime.now().difference(_lastRefresh!) < const Duration(seconds: 60)) {
+      return;
     }
+    _refreshing = true;
     try {
-      if (wilayas.isEmpty) wilayas = await api.fetchWilayas();
-    } catch (_) {}
-    try {
-      reports = await api.fetchReports();
-    } catch (_) {}
-    try {
-      weather = await api.fetchWeather();
-    } catch (_) {}
-    notifyListeners();
-    unawaited(_maybeAnnounce());
+      try {
+        final raw = await api.fetchSnapshotRaw();
+        snapshot = Snapshot.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+        sourceStatus = 'live';
+        _lastRefresh = DateTime.now();
+        SharedPreferences.getInstance().then((p) => p.setString('rb_cache', raw));
+      } catch (_) {
+        if (sourceStatus != 'cached') sourceStatus = 'offline';
+      }
+      try {
+        if (wilayas.isEmpty) wilayas = await api.fetchWilayas();
+      } catch (_) {}
+      try {
+        reports = await api.fetchReports();
+      } catch (_) {}
+      try {
+        // Weather is the largest payload — refetch at most every 10 min.
+        if (force || _lastWeather == null ||
+            DateTime.now().difference(_lastWeather!) > const Duration(minutes: 10)) {
+          weather = await api.fetchWeather();
+          _lastWeather = DateTime.now();
+        }
+      } catch (_) {}
+    } finally {
+      _refreshing = false;
+    }
+    notifyListeners(); // single rebuild per cycle (audit app#6)
     unawaited(loadBoundaries().then((_) => locate()));
+    unawaited(checkForUpdate());
   }
+
+  // ---- In-app update (pulls latest release info from the worker) ----
+  Map<String, dynamic>? updateInfo; // {version, tag, url, apk} when newer
+  bool _updateChecked = false;
+
+  Future<void> checkForUpdate() async {
+    if (_updateChecked) return;
+    _updateChecked = true;
+    try {
+      final info = await api.fetchAppInfo();
+      final latest = (info['version'] as String?)?.trim();
+      if (latest != null && latest.isNotEmpty && _isNewer(latest, appVersion)) {
+        updateInfo = info;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  void dismissUpdate() {
+    updateInfo = null;
+    notifyListeners();
+  }
+
+  /// Semver-ish compare "0.9.1" vs "0.10.0" numerically, not lexically.
+  static bool _isNewer(String a, String b) {
+    final pa = a.split('.').map((x) => int.tryParse(x) ?? 0).toList();
+    final pb = b.split('.').map((x) => int.tryParse(x) ?? 0).toList();
+    for (var i = 0; i < 3; i++) {
+      final x = i < pa.length ? pa[i] : 0, y = i < pb.length ? pb[i] : 0;
+      if (x != y) return x > y;
+    }
+    return false;
+  }
+
+  Future<bool> sendFeedback({required String type, int? rating, required String text}) =>
+      api.postFeedback(type: type, rating: rating, text: text, version: appVersion, lang: lang);
 
   /// One-shot position -> wilaya (no background tracking). Wilaya granularity
   /// matches ONM's alert granularity, so this is exact w.r.t. the source.
@@ -280,7 +330,6 @@ class AppState extends ChangeNotifier {
       if (code != hereWilaya) {
         hereWilaya = code;
         await syncTopics();
-        unawaited(_maybeAnnounce()); // GPS may reveal a red zone we just entered
       }
       notifyListeners();
     } catch (_) {}
@@ -372,10 +421,19 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<bool> sendReport({required String category, int? wilaya, String description = ''}) async {
-    final ok = await api.postReport(category: category, wilaya: wilaya, description: description, lang: lang);
-    if (ok) await refresh();
-    return ok;
+  /// Returns 'ok' | 'rate' | 'error' so the UI can explain a rate limit rather
+  /// than telling the user to retry when they can't for an hour.
+  Future<String> sendReport({required String category, int? wilaya, String description = ''}) async {
+    final res = await api.postReport(category: category, wilaya: wilaya, description: description, lang: lang);
+    if (res.report != null) {
+      // Show it immediately — the shared /v1/reports.json feed is edge-cached
+      // up to 60s, so a plain refresh wouldn't include the new report yet.
+      reports = [res.report!, ...reports.where((r) => r.id != res.report!.id)];
+      notifyListeners();
+      unawaited(refresh()); // reconcile with the server (and the AI verdict)
+      return 'ok';
+    }
+    return res.error ?? 'error';
   }
 
   Future<int?> confirm(String id) => api.confirmReport(id);

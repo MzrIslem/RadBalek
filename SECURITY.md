@@ -8,7 +8,7 @@ the app, its backend, and its users' data seriously.
 **Please do not open a public issue for security vulnerabilities.**
 
 Report privately through GitHub's **[Security Advisories](https://github.com/MzrIslem/RadBalek/security/advisories/new)**
-("Report a vulnerability"), or by contacting the maintainers at **YoushopDZ**.
+("Report a vulnerability"), or by contacting the maintainer, **Mezouar Islem**.
 
 Please include:
 

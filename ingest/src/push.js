@@ -96,6 +96,9 @@ function messageFor(alert, topic) {
     headline_en: alert.headline.en,
     onset: String(alert.onset || ""),
     expires: String(alert.expires || ""),
+    // Short spoken lines the native AlertActivity reads aloud (AR + FR).
+    spoken_fr: `Alerte rouge. ${alert.headline.fr}. Suivez les consignes, et appelez le 14.`,
+    spoken_ar: `تحذير أحمر. ${alert.headline.ar}. اتبعوا التعليمات واتصلوا بالرقم 14.`,
   };
   // RED is DATA-ONLY: the app's native RbMessagingService displays it itself
   // (forced alarm volume, full-screen intent, insistent siren) — channel-sound
@@ -153,8 +156,15 @@ export async function sendPush(env, notifications, alerts) {
   } catch {}
   for (const k of Object.keys(sentMap)) if (sentMap[k] < now) delete sentMap[k];
 
+  // Red-first: a life-critical red must never be starved by orange pushes that
+  // reach MAX_SENDS_PER_CYCLE before it (e.g. a quake red appended last behind
+  // 30 orange ONM topics).
+  const ordered = [...notifications].sort(
+    (a, b) => (byId.get(a.alertId)?.color === "red" ? 0 : 1) - (byId.get(b.alertId)?.color === "red" ? 0 : 1)
+  );
+
   let token = null;
-  for (const n of notifications) {
+  for (const n of ordered) {
     if (summary.sent >= MAX_SENDS_PER_CYCLE) break;
     const alert = byId.get(n.alertId);
     if (!alert) continue;

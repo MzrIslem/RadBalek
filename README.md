@@ -101,9 +101,8 @@ a cloud API, or a permission the user might not have granted.**
 
 ## Team
 
-Built by **[YoushopDZ](https://github.com/MzrIslem)** — an Algerian startup dev team.
-
-- **MzrIslem** — author & lead developer
+- **[Mezouar Islem](https://github.com/MzrIslem)** — author
+- **Claude Code** (Anthropic) — coder
 
 Made in Algeria 🇩🇿, for Algeria.
 
@@ -119,7 +118,7 @@ tracking, no third-party sharing. Details in [SECURITY.md](SECURITY.md#data-prot
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE). Copyright © 2026 YoushopDZ. Data from the sources above
+MIT — see [LICENSE](LICENSE). Copyright © 2026 Mezouar Islem. Data from the sources above
 remains under its own licence and must keep its attribution.
 
 ## Disclaimer

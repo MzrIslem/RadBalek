@@ -7,6 +7,7 @@ import '../api.dart';
 import '../app_state.dart';
 import '../strings.dart';
 import '../theme.dart';
+import 'feedback.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -167,11 +168,19 @@ class SettingsScreen extends StatelessWidget {
               section(S.t(lang, 'set_about'), cs.onSurfaceVariant, Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(S.t(lang, 'about_txt'), style: TextStyle(fontSize: 12.5, height: 1.5, color: cs.onSurfaceVariant)),
                 const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  onPressed: () => launchUrl(Uri.parse('${Api.base}/v1/reports.csv'), mode: LaunchMode.externalApplication),
-                  icon: const Icon(Icons.download_outlined, size: 17),
-                  label: Text(S.t(lang, 'export_csv'), style: const TextStyle(fontSize: 12.5)),
-                ),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  FilledButton.tonalIcon(
+                    onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const FeedbackScreen())),
+                    icon: const Icon(Icons.rate_review_outlined, size: 17),
+                    label: Text(S.t(lang, 'feedback'), style: const TextStyle(fontSize: 12.5)),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => launchUrl(Uri.parse('${Api.base}/v1/reports.csv'), mode: LaunchMode.externalApplication),
+                    icon: const Icon(Icons.download_outlined, size: 17),
+                    label: Text(S.t(lang, 'export_csv'), style: const TextStyle(fontSize: 12.5)),
+                  ),
+                ]),
               ])),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),

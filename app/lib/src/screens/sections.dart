@@ -32,7 +32,7 @@ class _SectionScaffold extends StatelessWidget {
               ]),
             )
           : RefreshIndicator(
-              onRefresh: st.refresh,
+              onRefresh: () => st.refresh(force: true),
               child: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 28), children: [body(context, st, snap)]),
             ),
     );
@@ -101,12 +101,15 @@ class NearbyScreen extends StatelessWidget {
         final lang = st.lang;
         final myCodes = {...st.myWilayas, if (st.hereWilaya != null) st.hereWilaya!};
         final mine = st.reports.where((r) => r.wilaya != null && myCodes.contains(r.wilaya)).toList();
+        // Streamlined: duplicate reports (same category + wilaya) collapse into
+        // one card with a ×N count, on top of the server-side AI moderation.
+        final groups = dedupeReports(mine);
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           sectionHeader(ctx, S.t(lang, 'nearby'), badge: S.t(lang, 'unofficial')),
-          if (mine.isEmpty)
+          if (groups.isEmpty)
             _emptyNote(ctx, Icons.location_off_outlined, S.t(lang, 'nearby_none'))
           else
-            for (final r in mine) reportCard(ctx, st, r),
+            for (final g in groups) reportCard(ctx, st, g.rep, count: g.count),
         ]);
       },
     );

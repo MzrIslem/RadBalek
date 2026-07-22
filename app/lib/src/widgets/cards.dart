@@ -230,6 +230,7 @@ Widget sourceCard(BuildContext context, AppState st, Incident i, {required bool 
         const SizedBox(width: 14),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // Provenance line: OFFICIEL / NON OFFICIEL badge + the named source.
             Row(children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -242,27 +243,58 @@ Widget sourceCard(BuildContext context, AppState st, Incident i, {required bool 
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: Text('${wLabel(st, i.wilayas)} · ${hhmm(i.observedAt)}',
+                child: Text(i.sourceName ?? (official ? 'Protection Civile' : 'Presse'),
                     maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant)),
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant)),
               ),
+              if (i.link != null)
+                Icon(Icons.open_in_new, size: 15, color: cs.onSurfaceVariant.withValues(alpha: .7)),
             ]),
             const SizedBox(height: 5),
             Text(i.headlineFr ?? S.t(lang, i.hazard),
                 maxLines: 3, overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.25)),
+            const SizedBox(height: 6),
+            // Where + a full timestamp (date · time · relative age).
+            Row(children: [
+              Icon(Icons.place_outlined, size: 13, color: cs.onSurfaceVariant),
+              const SizedBox(width: 3),
+              Flexible(
+                child: Text(wLabel(st, i.wilayas), maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.schedule, size: 13, color: cs.onSurfaceVariant),
+              const SizedBox(width: 3),
+              Text(stampAgo(i.observedAt, lang),
+                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+            ]),
           ]),
         ),
-        if (i.link != null)
-          Icon(Icons.open_in_new, size: 16, color: cs.onSurfaceVariant.withValues(alpha: .7)),
       ]),
     ),
   );
 }
 
-Widget reportCard(BuildContext context, AppState st, CitizenReport r) {
+/// Collapse duplicate citizen reports (same category + wilaya) into one entry,
+/// newest kept as representative — so 3 reports of the same fire in a wilaya
+/// show as one card "×3" instead of three near-identical rows.
+List<({CitizenReport rep, int count})> dedupeReports(List<CitizenReport> reports) {
+  final groups = <String, List<CitizenReport>>{};
+  for (final r in reports) {
+    groups.putIfAbsent('${r.category}:${r.wilaya}', () => []).add(r);
+  }
+  return groups.values.map((g) {
+    g.sort((a, b) => b.at.compareTo(a.at));
+    return (rep: g.first, count: g.length);
+  }).toList()
+    ..sort((a, b) => b.rep.at.compareTo(a.rep.at));
+}
+
+Widget reportCard(BuildContext context, AppState st, CitizenReport r, {int count = 1}) {
   final lang = st.lang;
   final cs = Theme.of(context).colorScheme;
+  final confirmed = r.status == 'community-confirmed';
   return Container(
     margin: const EdgeInsets.only(bottom: 12),
     padding: const EdgeInsets.all(14),
@@ -277,15 +309,31 @@ Widget reportCard(BuildContext context, AppState st, CitizenReport r) {
       const SizedBox(width: 14),
       Expanded(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(S.t(lang, 'cat_${r.category}'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          Row(children: [
+            Flexible(
+              child: Text(S.t(lang, 'cat_${r.category}'),
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            ),
+            if (count > 1) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(color: cs.secondaryContainer, borderRadius: BorderRadius.circular(99)),
+                child: Text('×$count', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: cs.onSecondaryContainer)),
+              ),
+            ],
+          ]),
           const SizedBox(height: 3),
           Text(
-            '${st.wilayaName(r.wilaya)} · ${hhmm(r.at)}${r.description.isNotEmpty ? ' · ${r.description}' : ''}',
+            count > 1
+                ? '${st.wilayaName(r.wilaya)} · $count ${S.t(lang, 'reports_n')} · ${hhmm(r.at)}'
+                : '${st.wilayaName(r.wilaya)} · ${hhmm(r.at)}${r.description.isNotEmpty ? ' · ${r.description}' : ''}',
             maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 2),
-          Text(r.status == 'community-confirmed' ? '${S.t(lang, 'st_ccf')} ✓' : S.t(lang, 'st_new'),
-              style: TextStyle(fontSize: 11, color: r.status == 'community-confirmed' ? vigilance('green', st.dark).solid : cs.onSurfaceVariant)),
+          Text(confirmed ? '${S.t(lang, 'st_ccf')} ✓' : S.t(lang, 'st_new'),
+              style: TextStyle(fontSize: 11, color: confirmed ? vigilance('green', st.dark).solid : cs.onSurfaceVariant)),
         ]),
       ),
       ConfirmButton(id: r.id, confirms: r.confirms),

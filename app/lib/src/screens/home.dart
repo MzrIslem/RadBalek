@@ -66,7 +66,7 @@ class HomeScreen extends StatelessWidget {
     }
 
     return RefreshIndicator(
-      onRefresh: st.refresh,
+      onRefresh: () => st.refresh(force: true),
       child: LayoutBuilder(builder: (ctx, box) {
         const gap = 12.0;
         final contentW = box.maxWidth - 32; // ListView horizontal padding
@@ -113,6 +113,11 @@ class HomeScreen extends StatelessWidget {
         ];
 
         return ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 24), children: [
+          // 0 — In-app update banner (a new GitHub release is out).
+          if (st.updateInfo != null) ...[
+            _updateBanner(context, st),
+            const SizedBox(height: 12),
+          ],
           // 1 — Alert hero (red takeover when a red alert touches my wilayas).
           if (redHere != null)
             _redMode(context, st, redHere)
@@ -154,6 +159,42 @@ class HomeScreen extends StatelessWidget {
 
   void _open(BuildContext context, Widget page) =>
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+
+  Widget _updateBanner(BuildContext context, AppState st) {
+    final lang = st.lang;
+    final cs = Theme.of(context).colorScheme;
+    final url = (st.updateInfo?['apk'] ?? st.updateInfo?['url']) as String?;
+    final tag = st.updateInfo?['tag'] as String?;
+    return Container(
+      padding: const EdgeInsetsDirectional.fromSTEB(16, 10, 8, 10),
+      decoration: BoxDecoration(color: cs.primaryContainer, borderRadius: BorderRadius.circular(20)),
+      child: Row(children: [
+        Icon(Icons.system_update, color: cs.onPrimaryContainer, size: 22),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(S.t(lang, 'update_title'),
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: cs.onPrimaryContainer)),
+            Text('${S.t(lang, 'update_body')}${tag != null ? ' ($tag)' : ''}',
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, color: cs.onPrimaryContainer.withValues(alpha: .85))),
+          ]),
+        ),
+        TextButton(
+          onPressed: st.dismissUpdate,
+          child: Text(S.t(lang, 'later'),
+              style: TextStyle(fontSize: 12, color: cs.onPrimaryContainer.withValues(alpha: .8))),
+        ),
+        FilledButton(
+          onPressed: url == null ? null : () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+          style: FilledButton.styleFrom(
+            backgroundColor: cs.primary, foregroundColor: cs.onPrimary,
+            padding: const EdgeInsets.symmetric(horizontal: 14), visualDensity: VisualDensity.compact),
+          child: Text(S.t(lang, 'update_btn'), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+        ),
+      ]),
+    );
+  }
 
   Widget _launcherLabel(BuildContext context, String text) {
     final cs = Theme.of(context).colorScheme;
@@ -297,54 +338,55 @@ class HomeScreen extends StatelessWidget {
           final trend = f?['trend'] as String? ?? 'flat';
           final arrow = trend == 'up' ? '↑' : trend == 'down' ? '↓' : '→';
 
-          Widget chip(String emoji, String big, String small, {Color? dot}) => Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 7),
-                  decoration: BoxDecoration(
-                    color: v.onContainer.withValues(alpha: .08),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(children: [
-                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Text(emoji, style: const TextStyle(fontSize: 12)),
-                      const SizedBox(width: 3),
-                      if (dot != null) ...[
-                        Container(width: 8, height: 8, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
-                        const SizedBox(width: 3),
-                      ],
-                      Flexible(
-                        child: Text(big, maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: v.onContainer)),
-                      ),
-                    ]),
-                    Text(small, maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 9.5, color: v.onContainer.withValues(alpha: .8))),
-                  ]),
-                ),
-              );
-
           return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Padding(
-              padding: const EdgeInsetsDirectional.only(start: 2, bottom: 5),
+              padding: const EdgeInsetsDirectional.only(start: 2, bottom: 6),
               child: Text('📍 ${st.wilayaName(code)}',
                   style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700,
                       color: v.onContainer.withValues(alpha: .9))),
             ),
-            Row(children: [
-              chip('🌡️', '${w['feels'] ?? w['t']}°', S.t(lang, 'feels')),
-              const SizedBox(width: 6),
-              chip('💨', '${w['wind']}', 'km/h'),
-              const SizedBox(width: 6),
-              chip('💧', '${w['rh']}%', S.t(lang, 'layer_h')),
-              if (aq != null) ...[
-                const SizedBox(width: 6),
-                chip('🍃', 'AQI ${aq['aqi']}', S.t(lang, 'aq_$aqBand'), dot: aqColor),
-              ],
-              if (f != null) ...[
-                const SizedBox(width: 6),
-                chip('📈', '$arrow ${f['peak48']}°', S.t(lang, 'fc48')),
-              ],
-            ]),
+            // Uniform 3-column tiles in a centered grid — equal widths line up,
+            // and the last row (2 tiles) is centered. dp-based, so it holds at
+            // any screen density.
+            LayoutBuilder(builder: (lctx, box) {
+              const gap = 6.0;
+              final tileW = (box.maxWidth - gap * 2) / 3;
+              Widget tile(String emoji, String value, String label, {Color? tint}) => Container(
+                    width: tileW,
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: (tint ?? v.onContainer).withValues(alpha: tint != null ? .22 : .08),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        Text(emoji, style: const TextStyle(fontSize: 13)),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: v.onContainer)),
+                        ),
+                      ]),
+                      const SizedBox(height: 2),
+                      Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 9.5, color: v.onContainer.withValues(alpha: .75))),
+                    ]),
+                  );
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                alignment: WrapAlignment.center,
+                children: [
+                  tile('🌡️', '${((w['feels'] ?? w['t'] ?? 0) as num).round()}°', S.t(lang, 'feels')),
+                  tile('💨', '${((w['wind'] ?? 0) as num).round()} km/h', 'vent'),
+                  tile('💧', '${w['rh']}%', S.t(lang, 'layer_h')),
+                  if (aq != null)
+                    tile('🍃', 'AQI ${aq['aqi']}', S.t(lang, 'aq_$aqBand'), tint: aqColor),
+                  if (f != null)
+                    tile('📈', '$arrow ${f['peak48']}°', S.t(lang, 'fc48')),
+                ],
+              );
+            }),
           ]);
         }),
       ]),

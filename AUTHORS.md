@@ -1,14 +1,9 @@
 # Authors
 
-**Rad Balek — رد بالك** is built by **YoushopDZ**, an Algerian startup dev team.
+**Rad Balek — رد بالك**
 
-## Core team
-
-- **MzrIslem** — author & lead developer
-
-## Organisation
-
-- **YoushopDZ** — startup dev team · https://github.com/MzrIslem
+- **Mezouar Islem** — author · https://github.com/MzrIslem
+- **Claude Code** (Anthropic) — coder
 
 ## Contributors
 

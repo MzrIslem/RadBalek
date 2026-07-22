@@ -3,6 +3,7 @@ package dz.radbalek.rad_balek
 import android.animation.ObjectAnimator
 import android.app.Activity
 import android.app.KeyguardManager
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -13,9 +14,14 @@ import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import java.util.Locale
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -31,6 +37,7 @@ import android.widget.TextView
 class AlertActivity : Activity() {
     private var player: MediaPlayer? = null
     private var focus: AudioFocusRequest? = null
+    private var tts: TextToSpeech? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,8 +49,21 @@ class AlertActivity : Activity() {
         val where = intent.getStringExtra("where") ?: ""
 
         setContentView(buildUi(title, body, where))
+        // Cancel the posting notification so its channel sound (a second siren
+        // source) stops — this activity's MediaPlayer is now the only siren.
+        try {
+            val aid = intent.getStringExtra("alertId") ?: "red"
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(aid.hashCode())
+        } catch (_: Exception) {}
         startSiren()
         vibrate()
+        // Spoken announcement (AR+FR) fires automatically WITH the alert — this
+        // is the piece the Flutter-side voice couldn't do from a locked screen.
+        // Respects the in-app toggle (SharedPreferences key "flutter.rb_voice").
+        val voiceOn = try {
+            getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE).getBoolean("flutter.rb_voice", true)
+        } catch (_: Exception) { true }
+        if (voiceOn) startVoice()
     }
 
     private fun showOverLockscreen() {
@@ -142,9 +162,57 @@ class AlertActivity : Activity() {
         } catch (_: Exception) {}
     }
 
+    // Lower the looping siren while the voice speaks, so the message is
+    // intelligible, then restore it. (Both are on the alarm stream.)
+    private fun duckSiren(down: Boolean) {
+        try { player?.setVolume(if (down) 0.12f else 1f, if (down) 0.12f else 1f) } catch (_: Exception) {}
+    }
+
+    private fun startVoice() {
+        val fr = (intent.getStringExtra("spoken_fr") ?: intent.getStringExtra("title") ?: "").let(::speakable)
+        val ar = (intent.getStringExtra("spoken_ar") ?: intent.getStringExtra("body") ?: "").let(::speakable)
+        if (fr.isBlank() && ar.isBlank()) return
+        tts = TextToSpeech(this) { status ->
+            if (status != TextToSpeech.SUCCESS) { Log.i("RBSIREN", "TTS init failed"); return@TextToSpeech }
+            val t = tts ?: return@TextToSpeech
+            try {
+                t.setAudioAttributes(AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+            } catch (_: Exception) {}
+            val arOk = ar.isNotBlank() && try { t.isLanguageAvailable(Locale("ar")) >= TextToSpeech.LANG_AVAILABLE } catch (_: Exception) { false }
+            t.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(id: String?) { runOnUiThread { duckSiren(true) } }
+                override fun onError(id: String?) { runOnUiThread { duckSiren(false) } }
+                override fun onDone(id: String?) {
+                    if (id == "fr" && arOk) {
+                        runOnUiThread {
+                            try { t.language = Locale("ar"); t.speak(ar, TextToSpeech.QUEUE_FLUSH, null, "ar") } catch (_: Exception) { runOnUiThread { duckSiren(false) } }
+                        }
+                    } else runOnUiThread { duckSiren(false) }
+                }
+            })
+            // Let the siren wail first (grab attention), then speak over it ducked.
+            Handler(Looper.getMainLooper()).postDelayed({
+                try {
+                    t.setSpeechRate(0.95f)
+                    if (fr.isNotBlank()) { t.language = Locale.FRENCH; t.speak(fr, TextToSpeech.QUEUE_FLUSH, null, "fr") }
+                    else if (arOk) { t.language = Locale("ar"); t.speak(ar, TextToSpeech.QUEUE_FLUSH, null, "ar") }
+                } catch (e: Exception) { Log.e("RBSIREN", "speak failed: ${e.message}") }
+            }, 2500)
+            Log.i("RBSIREN", "TTS ready (arVoice=$arOk)")
+        }
+    }
+
+    // Strip emoji / separators so the engine doesn't read "red circle", "dash"…
+    private fun speakable(s: String): String =
+        s.replace(Regex("[\\p{So}\\p{Cn}]"), " ").replace("—", " ").replace(Regex("\\s+"), " ").trim()
+
     private fun stopAll() {
         try { player?.stop(); player?.release() } catch (_: Exception) {}
         player = null
+        try { tts?.stop(); tts?.shutdown() } catch (_: Exception) {}
+        tts = null
         try {
             val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             focus?.let { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) am.abandonAudioFocusRequest(it) }

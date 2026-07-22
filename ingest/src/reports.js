@@ -14,7 +14,7 @@ import { WILAYAS, wilayaByCode } from "./wilayas.js";
 import { makeWilayaResolver } from "./geo.js";
 
 export const CATEGORIES = ["fire", "smoke", "road", "flood", "animal", "heat", "other"];
-const MAX_PER_HOUR = 5;
+const MAX_PER_HOUR = 10; // AI moderation + community-confirm handle bad content
 const SALT = "radbalek-v1";
 
 // Newest-first lexicographic key: inverse epoch millis, zero-padded.
@@ -128,13 +128,52 @@ export async function handleConfirmReport(request, env) {
   return json({ ok: true, confirms: report.confirms, status: report.status });
 }
 
-async function listReports(env, limit) {
+// Statuses the AI moderator or a human hid — never shown in the public feed.
+const HIDDEN = new Set(["spam", "rejected"]);
+
+// POST /v1/feedback {type: bug|idea|comment, rating?: 1-5, text, version?, lang?}
+// App feedback for the dev team (admin page only — never a public feed).
+export async function handleFeedback(request, env) {
+  let b;
+  try {
+    b = await request.json();
+  } catch {
+    return json({ error: "invalid json" }, 400);
+  }
+  const type = ["bug", "idea", "comment"].includes(b.type) ? b.type : "comment";
+  const text = String(b.text || "").slice(0, 600).replace(/[<>]/g, "").trim();
+  const rating = Number.isInteger(b.rating) && b.rating >= 1 && b.rating <= 5 ? b.rating : null;
+  if (!text && !rating) return json({ error: "empty" }, 400);
+  const ck = await clientKey(request);
+  const rl = Number((await env.EWS_KV.get(`fbrl:${ck}`)) || 0);
+  if (rl >= 3) return json({ error: "rate limit" }, 429);
+  const inv = String(10_000_000_000_000 - Date.now()).padStart(14, "0");
+  await env.EWS_KV.put(
+    `fb:${inv}:${Math.random().toString(36).slice(2, 6)}`,
+    JSON.stringify({
+      at: new Date().toISOString(),
+      type,
+      rating,
+      text,
+      version: String(b.version || "").slice(0, 20),
+      lang: ["fr", "ar", "en"].includes(b.lang) ? b.lang : "fr",
+    }),
+    { expirationTtl: 60 * 60 * 24 * 365 }
+  );
+  try {
+    await env.EWS_KV.put(`fbrl:${ck}`, String(rl + 1), { expirationTtl: 3600 });
+  } catch {}
+  return json({ ok: true }, 201);
+}
+
+async function listReports(env, limit, { includeHidden = false } = {}) {
   const listed = await env.EWS_KV.list({ prefix: "r:", limit });
   const out = [];
   for (const k of listed.keys) {
     const raw = await env.EWS_KV.get(k.name);
     if (!raw) continue;
     const { ck: _omit, ...pub } = JSON.parse(raw);
+    if (!includeHidden && HIDDEN.has(pub.status)) continue;
     out.push(pub);
   }
   return out;

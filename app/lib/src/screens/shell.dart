@@ -36,10 +36,10 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Push-driven model: refresh on resume (plus FCM onMessage), no polling.
+    // refresh() is throttled (60s) and triggers locate() itself, so a quick
+    // app-switch no longer re-fetches everything + a fresh GPS fix each time.
     if (state == AppLifecycleState.resumed && mounted) {
-      final st = context.read<AppState>();
-      st.refresh();
-      st.locate();
+      context.read<AppState>().refresh();
     }
   }
 

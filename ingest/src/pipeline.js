@@ -14,14 +14,19 @@ import { normalizeOnm, normalizeFireCluster, normalizeDgpcIncident, fcmTopicsFor
 
 export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, fetchFn = fetch, now = () => new Date() } = {}) {
   const errors = [];
+  // Per-source timeout: one hung upstream (a stalled t.me / EMSC socket, or
+  // dgpc.dz 522'ing to Worker→CF) must never block the whole scheduled() run —
+  // that is what silenced all push for 3h on 2026-07-19.
+  const T = (p, ms, name) =>
+    Promise.race([Promise.resolve(p), new Promise((_, rej) => setTimeout(() => rej(new Error(`${name} timeout ${ms}ms`)), ms))]);
   const settled = await Promise.allSettled([
-    fetchOnmAlerts(fetchFn),
-    fetchDgpcPosts(fetchFn),
-    fetchFirmsHotspots(firmsMapKey, { fetchFn }),
-    fetchQuakes(fetchFn),
-    fetchDgpcWeb(fetchFn),
-    fetchNews(fetchFn),
-    fetchCraag(fetchFn),
+    T(fetchOnmAlerts(fetchFn), 9000, "onm"),
+    T(fetchDgpcPosts(fetchFn), 8000, "dgpc-telegram"),
+    T(fetchFirmsHotspots(firmsMapKey, { fetchFn }), 9000, "firms"),
+    T(fetchQuakes(fetchFn), 8000, "quakes"),
+    T(fetchDgpcWeb(fetchFn), 8000, "dgpc-web"),
+    T(fetchNews(fetchFn), 8000, "news"),
+    T(fetchCraag(fetchFn), 8000, "craag"),
   ]);
   const [onmR, dgpcR, firmsR, quakesR, dgpcWebR, newsR, craagR] = settled;
   const grab = (r, name, fallback) => {

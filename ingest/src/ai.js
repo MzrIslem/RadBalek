@@ -18,7 +18,7 @@ export async function geminiGenerate(env, { system, contents, maxTokens = 400, t
     headers: { "x-goog-api-key": env.GEMINI_API_KEY.trim(), "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(`gemini ${r.status}: ${(await r.text()).slice(0, 120)}`);
+  if (!r.ok) throw new Error(`gemini ${r.status}: ${(await r.text()).slice(0, 500)}`);
   const j = await r.json();
   return (j.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
 }
@@ -89,7 +89,6 @@ export async function handleCategory(request, env) {
         `Reply with EXACTLY one word matching the hazard: fire, smoke, road, flood, animal, heat, other.` }] }],
       maxTokens: 12,
       temperature: 0,
-      noThinking: true,
     });
     const word = out.toLowerCase().replace(/[^a-z]/g, "");
     const cats = ["fire", "smoke", "road", "flood", "animal", "heat", "other"];

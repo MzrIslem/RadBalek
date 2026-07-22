@@ -66,7 +66,10 @@ class Api {
         .toList();
   }
 
-  Future<bool> postReport({
+  /// Posts a report. Returns the created report (shown instantly, since the
+  /// shared feed is edge-cached), or an error code: 'rate' (too many reports
+  /// this hour) | 'error' (anything else).
+  Future<({CitizenReport? report, String? error})> postReport({
     required String category,
     int? wilaya,
     double? lat,
@@ -74,19 +77,54 @@ class Api {
     String description = '',
     String lang = 'fr',
   }) async {
-    final r = await _c.post(
-      Uri.parse('$base/v1/reports'),
-      headers: {'content-type': 'application/json'},
-      body: jsonEncode({
-        'category': category,
-        'wilaya': wilaya,
-        'lat': lat,
-        'lon': lon,
-        'description': description,
-        'lang': lang,
-      }),
-    );
-    return r.statusCode == 201;
+    try {
+      final r = await _c.post(
+        Uri.parse('$base/v1/reports'),
+        headers: {'content-type': 'application/json'},
+        body: jsonEncode({
+          'category': category,
+          'wilaya': wilaya,
+          'lat': lat,
+          'lon': lon,
+          'description': description,
+          'lang': lang,
+        }),
+      );
+      if (r.statusCode == 429) return (report: null, error: 'rate');
+      if (r.statusCode != 201) return (report: null, error: 'error');
+      final j = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+      final rep = j['report'] as Map<String, dynamic>?;
+      return (report: rep == null ? null : CitizenReport.fromJson(rep), error: null);
+    } catch (_) {
+      return (report: null, error: 'error');
+    }
+  }
+
+  /// Latest published release {version, tag, url, apk} — for the in-app
+  /// update banner. Empty map when unavailable (fail-quiet).
+  Future<Map<String, dynamic>> fetchAppInfo() async {
+    try {
+      final r = await _c.get(Uri.parse('$base/v1/app.json'));
+      if (r.statusCode != 200) return const {};
+      return (jsonDecode(utf8.decode(r.bodyBytes)) as Map).cast<String, dynamic>();
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// App feedback (bug/idea/comment + optional 1-5 rating) — for the dev team.
+  Future<bool> postFeedback({required String type, int? rating, required String text,
+      required String version, required String lang}) async {
+    try {
+      final r = await _c.post(
+        Uri.parse('$base/v1/feedback'),
+        headers: {'content-type': 'application/json'},
+        body: jsonEncode({'type': type, 'rating': rating, 'text': text, 'version': version, 'lang': lang}),
+      );
+      return r.statusCode == 201;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<int?> confirmReport(String id) async {

@@ -2,17 +2,23 @@
 //   GET  /v1/admin/reports?key=K          newest 100 reports (all statuses)
 //   POST /v1/admin/moderate {key,id,status} status: verified | rejected
 //   POST /v1/test-push {token}            self-test notification to one device
-// Gemini triage (optional, env.GEMINI_API_KEY): classifies new reports into
-// status "auto-ok" | "flagged" before human review. Verified stays human-only.
+// AI moderation (optional, env.GEMINI_API_KEY): each new report is reviewed by
+// Gemini, which can hide confident spam/abuse and correct a wrong category —
+// asynchronously and FAIL-OPEN. In a safety feed the dangerous error is
+// suppressing a real report, so anything the AI is unsure about stays visible;
+// only "spam"/"rejected" are hidden. Human /admin moderation is the final word.
 import { corsHeaders } from "./reports.js";
 import { getAccessToken } from "./push.js";
+import { geminiGenerate } from "./ai.js";
 
 const json = (o, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }) });
 
 export async function handleAdminList(url, env) {
   if (!env.ADMIN_KEY || url.searchParams.get("key") !== env.ADMIN_KEY) return json({ error: "forbidden" }, 403);
-  const listed = await env.EWS_KV.list({ prefix: "r:", limit: 100 });
+  // ?kind=feedback lists app feedback (fb:) instead of hazard reports (r:).
+  const prefix = url.searchParams.get("kind") === "feedback" ? "fb:" : "r:";
+  const listed = await env.EWS_KV.list({ prefix, limit: 100 });
   const out = [];
   for (const k of listed.keys) {
     const raw = await env.EWS_KV.get(k.name);
@@ -38,45 +44,64 @@ export async function handleModerate(request, env) {
   return json({ ok: true, id: report.id, status: report.status });
 }
 
-// Gemini Flash first-pass triage — advisory only, never sets "verified".
-export async function geminiTriage(env, report) {
+const CATS = ["fire", "smoke", "road", "flood", "animal", "heat", "other"];
+
+// Gemini Flash-Lite moderator (~1s). Returns {verdict} or null on any failure.
+// The prompt is tuned to KEEP genuine reports even when poorly written — spam
+// must be obvious to be removed.
+export async function geminiModerate(env, report) {
   if (!env.GEMINI_API_KEY || !report.description) return null;
+  const text = String(report.description).slice(0, 400);
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${env.GEMINI_API_KEY.trim()}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text:
-            `Citizen hazard report from Algeria. Category claimed: ${report.category}. Text (may be Arabic/French/darija): "${report.description}". ` +
-            `Reply with exactly one word: OK (plausible hazard report), SPAM (ads/gibberish/insults/jokes), or MISMATCH (real report but wrong category).` }] }],
-          generationConfig: { maxOutputTokens: 5, temperature: 0 },
-        }),
-      }
-    );
-    if (!res.ok) return null;
-    const word = ((await res.json()).candidates?.[0]?.content?.parts?.[0]?.text || "").trim().toUpperCase();
-    if (word.startsWith("SPAM")) return "flagged";
-    if (word.startsWith("MISMATCH")) return "flagged";
-    if (word.startsWith("OK")) return "auto-ok";
+    const out = await geminiGenerate(env, {
+      contents: [{ role: "user", parts: [{ text:
+        `You moderate citizen hazard reports for an Algerian emergency-warning app. ` +
+        `A user submitted category "${report.category}" with text (Arabic, Algerian darija, or French): "${text}". ` +
+        `Err strongly toward KEEPING a genuine hazard report even if short, misspelled, in rough darija, or containing a rude word. ` +
+        `Classify:\n` +
+        `- SPAM = advertising/promotion, insults or harassment of people, vulgar/obscene/sexual language, hate speech, jokes, random gibberish, or anything clearly NOT reporting a real danger. Profanity in Arabic, Algerian darija, or French counts as SPAM ONLY when the message is not a genuine hazard report.\n` +
+        `- MISMATCH = a real hazard report but the wrong category; then give the correct one.\n` +
+        `- OK = a plausible hazard report — keep it even if it contains a swear word, as long as it describes a real danger.\n` +
+        `Reply with ONE token only: OK, or SPAM, or MISMATCH:<category> where <category> is one of ${CATS.join("/")}.` }] }],
+      maxTokens: 12,
+      temperature: 0,
+    });
+    const s = (out || "").trim().toUpperCase();
+    if (s.startsWith("SPAM")) return { verdict: "spam" };
+    if (s.startsWith("MISMATCH")) {
+      const cat = (s.split(":")[1] || "").toLowerCase().replace(/[^a-z]/g, "");
+      return { verdict: "mismatch", category: CATS.includes(cat) ? cat : null };
+    }
+    if (s.startsWith("OK")) return { verdict: "ok" };
     return null;
   } catch {
     return null;
   }
 }
 
-// Applied async after report creation; only upgrades status from "new".
+// Applied async (ctx.waitUntil) after report creation. FAIL-OPEN: on any AI
+// failure the report keeps status "new" and stays visible. Only ever acts on a
+// still-"new" report, so it never overrides a human or community decision.
 export async function triageReport(env, pub) {
-  const st = await geminiTriage(env, pub);
-  if (!st) return;
+  const m = await geminiModerate(env, pub);
+  if (!m) return; // AI unavailable/unsure -> report stays "new" and visible
   const raw = await env.EWS_KV.get(pub.id);
   if (!raw) return;
   const r = JSON.parse(raw);
-  if (r.status === "new") {
-    r.status = st;
-    await env.EWS_KV.put(r.id, JSON.stringify(r), { expirationTtl: 60 * 60 * 24 * 180 });
+  if (r.status !== "new") return; // don't touch verified/rejected/confirmed
+  if (m.verdict === "spam") {
+    r.status = "spam"; // hidden from the public feed by listReports()
+    r.moderatedBy = "ai";
+  } else {
+    r.status = "auto-ok";
+    if (m.verdict === "mismatch" && m.category && m.category !== r.category) {
+      r.categoryOriginal = r.category;
+      r.category = m.category; // corrected, still fully visible
+    }
   }
+  try {
+    await env.EWS_KV.put(r.id, JSON.stringify(r), { expirationTtl: 60 * 60 * 24 * 180 });
+  } catch {} // KV write best-effort — worst case the report stays "new" (visible)
 }
 
 export async function handleTestPush(request, env, ctx) {
@@ -155,6 +180,12 @@ export function liteSnapshot(full) {
       lon: i.lon,
       mag: i.mag,
       observedAt: i.observedAt,
+      // Text sources (Algerian press, dgpc.dz) render their own headline,
+      // named source and article link — the map-pin sources (FIRMS, quakes)
+      // don't need them, so this only fattens a handful of incidents.
+      ...(i.source === "press" || i.source === "dgpc-web"
+        ? { headline: i.headline, link: i.link, sourceName: i.sourceName }
+        : {}),
     })),
   });
 }
