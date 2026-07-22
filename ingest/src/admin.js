@@ -1,6 +1,8 @@
 // Curator + utility endpoints.
 //   GET  /v1/admin/reports?key=K          newest 100 reports (all statuses)
 //   POST /v1/admin/moderate {key,id,status} status: verified | rejected
+//   GET  /v1/admin/overview               mission control: snapshot age, sources, push, config
+//   POST /v1/admin/app-latest             publish the in-app update banner (KV app:latest)
 //   POST /v1/test-push {token}            self-test notification to one device
 // AI moderation (optional, env.GEMINI_API_KEY): each new report is reviewed by
 // Gemini, which can hide confident spam/abuse and correct a wrong category —
@@ -24,7 +26,7 @@ function adminKeyOf(request, url) {
   return (m ? m[1] : url.searchParams.get("key")) || "";
 }
 
-async function adminAuthed(request, url, env) {
+export async function adminAuthed(request, url, env) {
   if (!env.ADMIN_KEY) return false;
   const ip = request.headers.get("cf-connecting-ip") || "0";
   const rlKey = `adminrl:${ip}`;
@@ -72,6 +74,83 @@ export async function handleModerate(request, env) {
   report.status = b.status;
   await env.EWS_KV.put(report.id, JSON.stringify(report), { expirationTtl: 60 * 60 * 24 * 180 });
   return json({ ok: true, id: report.id, status: report.status });
+}
+
+// Mission-control read: everything the creator needs to know the backend is
+// alive, in one authed call — snapshot age, per-source health, last push
+// cycle, the published app version and which secrets are configured.
+// Cost: 3 KV gets, no list — safe to poll every minute from an open dashboard.
+export async function handleAdminOverview(request, url, env) {
+  if (!(await adminAuthed(request, url, env))) return json({ error: "forbidden" }, 403);
+  const [latestRaw, pushRaw, appRaw] = await Promise.all([
+    env.EWS_KV.get("latest"),
+    env.EWS_KV.get("push:last"),
+    env.EWS_KV.get("app:latest"),
+  ]);
+  const parse = (s) => {
+    try {
+      return s ? JSON.parse(s) : null;
+    } catch {
+      return null;
+    }
+  };
+  const snap = parse(latestRaw);
+  // Per-source incident counts + freshest observation time.
+  const sources = {};
+  for (const i of (snap && snap.incidents) || []) {
+    const s = sources[i.source] || (sources[i.source] = { count: 0, newest: null });
+    s.count++;
+    if (i.observedAt && (!s.newest || i.observedAt > s.newest)) s.newest = i.observedAt;
+  }
+  return json({
+    now: new Date().toISOString(),
+    generatedAt: snap ? snap.generatedAt : null,
+    stats: snap ? snap.stats : null,
+    errors: (snap && snap.errors) || [],
+    alerts: ((snap && snap.alerts) || []).map((a) => ({
+      hazard: a.hazard,
+      color: a.color,
+      event: a.event,
+      wilayas: (a.wilayas || []).length,
+      expires: a.expires || null,
+    })),
+    sources,
+    push: parse(pushRaw),
+    appLatest: parse(appRaw),
+    config: { gemini: !!env.GEMINI_API_KEY, push: !!env.FIREBASE_SA, firms: !!env.FIRMS_MAP_KEY },
+  });
+}
+
+// Publish the in-app update banner from the dashboard — replaces the release
+// ritual step `npx wrangler kv key put "app:latest" ... --remote`. The app
+// polls /v1/app.json (edge-cached 900s), so every device sees the banner
+// within ~15 min of clicking Publier.
+export async function handleAdminAppLatest(request, url, env) {
+  if (!(await adminAuthed(request, url, env))) return json({ error: "forbidden" }, 403);
+  let b;
+  try {
+    b = await request.json();
+  } catch {
+    return json({ error: "invalid json" }, 400);
+  }
+  const version = String(b.version || "").trim();
+  if (!/^\d+\.\d+\.\d+$/.test(version)) return json({ error: "version must be x.y.z" }, 400);
+  const https = (s) => /^https:\/\/\S+$/.test(s);
+  const tag = String(b.tag || "v" + version).trim().slice(0, 60);
+  const page = String(b.url || "").trim();
+  const apk = String(b.apk || "").trim();
+  if (page && !https(page)) return json({ error: "url must be https" }, 400);
+  if (apk && !https(apk)) return json({ error: "apk must be https" }, 400);
+  const doc = {
+    version,
+    tag,
+    url: page || undefined,
+    apk: apk || undefined,
+    notes: String(b.notes || "").slice(0, 500) || undefined,
+    at: new Date().toISOString(),
+  };
+  await env.EWS_KV.put("app:latest", JSON.stringify(doc));
+  return json({ ok: true, appLatest: doc });
 }
 
 const CATS = ["fire", "smoke", "road", "flood", "animal", "heat", "other"];

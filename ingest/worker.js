@@ -20,7 +20,16 @@ import {
   handleExportCsv,
   handleFeedback,
 } from "./src/reports.js";
-import { handleAdminList, handleModerate, handleTestPush, triageReport, liteSnapshot } from "./src/admin.js";
+import {
+  handleAdminList,
+  handleModerate,
+  handleTestPush,
+  triageReport,
+  liteSnapshot,
+  adminAuthed,
+  handleAdminOverview,
+  handleAdminAppLatest,
+} from "./src/admin.js";
 import { ADMIN_HTML } from "./src/adminui.js";
 import { handleWeather } from "./src/weather.js";
 import { handleChat, handleCategory } from "./src/ai.js";
@@ -105,6 +114,29 @@ export default {
       return new Response(ADMIN_HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
     if (path === "/v1/admin/reports") return handleAdminList(req, url, env);
     if (path === "/v1/admin/moderate" && req.method === "POST") return handleModerate(req, env);
+    if (path === "/v1/admin/overview") return handleAdminOverview(req, url, env);
+    if (path === "/v1/admin/app-latest" && req.method === "POST") return handleAdminAppLatest(req, url, env);
+    // Force an immediate pipeline collect (no push — pushes stay cron-only so
+    // concurrent invocations can never race the dedupe map and double-send).
+    if (path === "/v1/admin/refresh" && req.method === "POST") {
+      if (!(await adminAuthed(req, url, env)))
+        return new Response(JSON.stringify({ error: "forbidden" }), {
+          status: 403,
+          headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }),
+        });
+      try {
+        const snap = await refresh(env);
+        return new Response(
+          JSON.stringify({ ok: true, generatedAt: snap.generatedAt, byColor: snap.stats.byColor, errors: snap.errors.length }),
+          { headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }) }
+        );
+      } catch (err) {
+        return new Response(JSON.stringify({ error: String(err && err.message) }), {
+          status: 500,
+          headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }),
+        });
+      }
+    }
     if (path === "/v1/test-push" && req.method === "POST") return handleTestPush(req, env, ctx);
     // EFFIS Fire Weather Index forecast raster over Algeria, cached per day.
     // TIME is mandatory — without it EFFIS silently returns a blank tile.
