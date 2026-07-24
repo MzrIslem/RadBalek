@@ -9,14 +9,36 @@ export const FIRMS_SOURCES = ["VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA2
 export async function fetchFirmsHotspots(mapKey, { days = 1, sources = FIRMS_SOURCES, fetchFn = fetch } = {}) {
   if (!mapKey) return { skipped: true, reason: "FIRMS_MAP_KEY not set", hotspots: [] };
   mapKey = String(mapKey).trim(); // secrets piped via shell can carry a stray \r\n
+  // Fetch all satellite sources CONCURRENTLY. They used to run in a sequential
+  // loop — 4 round-trips to FIRMS could not finish inside the pipeline's timeout
+  // (the "firms timeout 9000ms" that left the fire map permanently blank in
+  // fire season). allSettled so one slow/failed sensor never loses the others.
+  const results = await Promise.allSettled(
+    sources.map(async (src) => {
+      const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${mapKey}/${src}/${DZ_BBOX}/${days}`;
+      // Per-source abort: FIRMS NRT can hang 15-25s on one sensor. Bounding each
+      // fetch means one slow satellite can't drag the whole parallel batch past
+      // the pipeline budget — the sensors that answer in time still deliver.
+      const res = await fetchFn(url, {
+        headers: { "user-agent": "aisx-ews/0.1 (+ingest)", accept: "text/csv,*/*" },
+        signal: AbortSignal.timeout(18000),
+      });
+      if (!res.ok) throw new Error(`FIRMS ${src} HTTP ${res.status}`);
+      return parseFirmsCsv(await res.text(), src);
+    })
+  );
   const hotspots = [];
-  for (const src of sources) {
-    const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${mapKey}/${src}/${DZ_BBOX}/${days}`;
-    const res = await fetchFn(url, { headers: { "user-agent": "aisx-ews/0.1 (+ingest)", accept: "text/csv,*/*" } });
-    if (!res.ok) throw new Error(`FIRMS ${src} HTTP ${res.status}`);
-    hotspots.push(...parseFirmsCsv(await res.text(), src));
+  const errors = [];
+  for (const r of results) {
+    if (r.status === "fulfilled") hotspots.push(...r.value);
+    else errors.push(String(r.reason && r.reason.message ? r.reason.message : r.reason));
   }
-  return { skipped: false, hotspots };
+  // Only a TOTAL wipeout is "skipped" — partial sensor coverage is still useful
+  // fire data and must reach the map.
+  if (!hotspots.length && errors.length === sources.length) {
+    return { skipped: true, reason: errors.join("; "), hotspots: [] };
+  }
+  return { skipped: false, hotspots, errors };
 }
 
 export function parseFirmsCsv(csv, sourceName) {

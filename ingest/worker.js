@@ -56,7 +56,10 @@ export default {
       "/v1/reports.csv": 300, // 1 list + up to 1000 gets — must be cached
       "/v1/history.json": 300, // kills the 168-get burst per history open
       "/v1/weather.json": 600,
-      "/v1/fwi.png": 10800,
+      // NOTE: /v1/fwi.png is intentionally NOT edge-cached. MapServer returns
+      // errors as 200 + HTML, and an edge-cached error page can't be purged on
+      // workers.dev — it froze the fire-risk layer for a day. Its handler
+      // validates the PNG and serves from KV (refreshed daily) instead.
       "/v1/app.json": 900,
     };
     const cacheable = req.method === "GET" && CACHE_TTL[path];
@@ -148,19 +151,32 @@ export default {
     // TIME is mandatory — without it EFFIS silently returns a blank tile.
     if (path === "/v1/fwi.png") {
       const day = new Date().toISOString().slice(0, 10);
+      // MapServer/EFFIS signals failure with HTTP 200 + an HTML body. Guard on
+      // the PNG magic bytes so an error page is never cached or served as an
+      // "image". Validating the KV read as well lets a previously poisoned
+      // cache self-heal on the very next request (no manual purge needed).
+      const isPng = (buf) => {
+        if (!buf || buf.byteLength < 8) return false;
+        const b = new Uint8Array(buf, 0, 8);
+        return b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
+      };
       let img = await env.EWS_KV.get(`fwi:${day}`, "arrayBuffer");
-      if (!img) {
+      if (!isPng(img)) {
         const r = await fetch(
           `https://maps.effis.emergency.copernicus.eu/effis?service=WMS&version=1.1.1&request=GetMap&layers=mf010.fwi&styles=default&time=${day}&srs=EPSG:4326&bbox=-8.7,18.9,12.0,37.3&width=1024&height=910&format=image/png&transparent=true`,
           { headers: { "user-agent": "radbalek/0.2 (+ews Algeria)", accept: "image/png,*/*" } }
         );
         if (!r.ok) return new Response("effis " + r.status, { status: 502, headers: corsHeaders() });
-        img = await r.arrayBuffer();
-        await env.EWS_KV.put(`fwi:${day}`, img, { expirationTtl: 86400 });
+        const buf = await r.arrayBuffer();
+        if (!isPng(buf)) return new Response("effis: non-image response", { status: 502, headers: corsHeaders() });
+        img = buf;
+        try {
+          await env.EWS_KV.put(`fwi:${day}`, img, { expirationTtl: 86400 });
+        } catch {}
       }
-      return store(new Response(img, {
+      return new Response(img, {
         headers: corsHeaders({ "content-type": "image/png", "cache-control": "public, max-age=10800" }),
-      }));
+      });
     }
     if (path === "/v1/ai/chat" && req.method === "POST") return handleChat(req, env);
     if (path === "/v1/ai/category" && req.method === "POST") return handleCategory(req, env);
@@ -222,6 +238,34 @@ export default {
   },
 };
 
+// Fire-map resilience. FIRMS NRT is slow (15-25s a sensor) and sometimes
+// overruns its fetch budget, which used to blank the fire map mid-fire-season.
+// On a good cycle we stash the fire incidents; on a skipped cycle we re-inject
+// the most recent set (if < 3h old — NRT fires stay valid for hours). The stale
+// flag lets the app mark them "last known". Best-effort: never breaks a snapshot.
+async function reconcileFires(env, snap) {
+  try {
+    const fires = (snap.incidents || []).filter((i) => i.source === "firms");
+    if (!snap.stats.firmsSkipped) {
+      // Fresh FIRMS this cycle (even zero fires is a valid all-clear) — cache it.
+      try {
+        await env.EWS_KV.put("firms:last", JSON.stringify({ at: snap.generatedAt, fires }));
+      } catch {}
+      return;
+    }
+    const raw = await env.EWS_KV.get("firms:last");
+    if (!raw) return;
+    const cached = JSON.parse(raw);
+    const fresh = Date.parse(snap.generatedAt) - Date.parse(cached.at) < 3 * 3600 * 1000;
+    if (!fresh || !cached.fires || !cached.fires.length) return;
+    for (const f of cached.fires) f.stale = true;
+    snap.incidents.push(...cached.fires);
+    snap.stats.fireClusters = cached.fires.length;
+    snap.stats.incidents = snap.incidents.length;
+    snap.stats.firmsFromCache = true;
+  } catch {}
+}
+
 // doPush: only the scheduled cron pushes — fetch-triggered rebuilds must not,
 // or concurrent invocations race on the dedupe map and double-send.
 async function refresh(env, doPush = false) {
@@ -229,6 +273,8 @@ async function refresh(env, doPush = false) {
     firmsMapKey: env.FIRMS_MAP_KEY || null,
     wilayasGeojson: geo,
   });
+  // Keep the fire map alive when this cycle's FIRMS fetch was skipped.
+  await reconcileFires(env, snap);
   // Best-effort: when the daily KV write quota is exhausted this put throws
   // 429 — that must never kill the push path below (2026-07-19 outage: the
   // whole cron died here for 3h and no alerts went out).

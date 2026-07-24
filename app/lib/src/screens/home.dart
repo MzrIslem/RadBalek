@@ -395,9 +395,15 @@ class HomeScreen extends StatelessWidget {
   Widget _hero(BuildContext context, AppState st, Snapshot snap) {
     final lang = st.lang;
     final top = snap.alerts.isEmpty ? null : snap.alerts.first;
-    final color = top?.color ?? 'green';
-    final v = vigilance(color == 'yellow' ? 'yellow' : color, st.dark);
+    // The hero speaks for the WHOLE country: lead with how many wilayas sit at
+    // the worst active level, not a single alert's name (the personal banner
+    // above already owns "what touches you" — repeating it here is noise).
     final reds = snap.wilayasWith('red').length;
+    final oranges = snap.wilayasWith('orange').length;
+    final yellows = snap.wilayasWith('yellow').length;
+    final color = reds > 0 ? 'red' : oranges > 0 ? 'orange' : yellows > 0 ? 'yellow' : 'green';
+    final worstN = color == 'red' ? reds : color == 'orange' ? oranges : yellows;
+    final v = vigilance(color, st.dark);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(22),
@@ -421,14 +427,16 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(width: 11),
           Expanded(
             child: Text(
-              top == null ? S.t(lang, 'no_alert') : '${S.t(lang, color)} — ${S.t(lang, top.hazard)}',
+              color == 'green' ? S.t(lang, 'no_alert') : '$worstN ${S.t(lang, 'wilayas_$color')}',
               style: TextStyle(fontSize: 25, fontWeight: FontWeight.w700, color: v.onContainer, height: 1.2),
             ),
           ),
         ]),
         const SizedBox(height: 6),
         Text(
-          '$reds ${S.t(lang, 'wilayas_red')} · ${S.t(lang, 'until')} ${hhmm(top?.expires)} · ${S.t(lang, st.sourceStatus)} ${hhmm(snap.generatedAt)}',
+          top == null
+              ? '${S.t(lang, st.sourceStatus)} ${hhmm(snap.generatedAt)}'
+              : '${S.t(lang, 'until')} ${hhmm(top.expires)} · ${S.t(lang, st.sourceStatus)} ${hhmm(snap.generatedAt)}',
           style: TextStyle(fontSize: 13, color: v.onContainer.withValues(alpha: .9)),
         ),
         const SizedBox(height: 12),
@@ -487,7 +495,7 @@ class HomeScreen extends StatelessWidget {
                 alignment: WrapAlignment.center,
                 children: [
                   tile('🌡️', '${((w['feels'] ?? w['t'] ?? 0) as num).round()}°', S.t(lang, 'feels')),
-                  tile('💨', '${((w['wind'] ?? 0) as num).round()} km/h', 'vent'),
+                  tile('💨', '${((w['wind'] ?? 0) as num).round()} km/h', S.t(lang, 'layer_w')),
                   tile('💧', '${w['rh']}%', S.t(lang, 'layer_h')),
                   if (aq != null)
                     tile('🍃', 'AQI ${aq['aqi']}', S.t(lang, 'aq_$aqBand'), tint: aqColor),

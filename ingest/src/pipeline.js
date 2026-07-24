@@ -22,7 +22,7 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
   const settled = await Promise.allSettled([
     T(fetchOnmAlerts(fetchFn), 9000, "onm"),
     T(fetchDgpcPosts(fetchFn), 8000, "dgpc-telegram"),
-    T(fetchFirmsHotspots(firmsMapKey, { fetchFn }), 9000, "firms"),
+    T(fetchFirmsHotspots(firmsMapKey, { fetchFn }), 20000, "firms"),
     T(fetchQuakes(fetchFn), 8000, "quakes"),
     T(fetchDgpcWeb(fetchFn), 8000, "dgpc-web"),
     T(fetchNews(fetchFn), 8000, "news"),
