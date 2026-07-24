@@ -451,8 +451,14 @@ class HomeScreen extends StatelessWidget {
                         Text(emoji, style: const TextStyle(fontSize: 13)),
                         const SizedBox(width: 5),
                         Flexible(
-                          child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: v.onContainer)),
+                          // Scale to fit rather than truncate — "2 km/h" / "AQI 51"
+                          // no longer clip to "2 k…" in the narrow 3-up tiles.
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Text(value, maxLines: 1,
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: v.onContainer)),
+                          ),
                         ),
                       ]),
                       const SizedBox(height: 2),
