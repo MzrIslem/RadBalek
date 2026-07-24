@@ -10,6 +10,7 @@ import '../theme.dart';
 import '../voice.dart';
 import '../widgets/sheets.dart';
 import 'chat.dart';
+import 'consignes.dart';
 import 'sections.dart';
 
 /// Home = launcher. The landing screen carries only what matters in the first
@@ -130,7 +131,21 @@ class HomeScreen extends StatelessWidget {
             _updateBanner(context, st),
             const SizedBox(height: 12),
           ],
-          // 1 — Alert hero (red takeover when a red alert touches my wilayas).
+          // 0b — Reliability warning. An OEM can revoke a permission months
+          // after setup and the app would fail SILENTLY at the worst moment,
+          // so a broken prerequisite is surfaced here, not left in Réglages.
+          if (st.reliabilityOk == false) ...[
+            _reliabilityBanner(context, st),
+            const SizedBox(height: 12),
+          ],
+          // 1 — Personal "am I safe?" banner: the one-glance answer for MY
+          // wilayas (green all-clear vs the worst vigilance touching me). Red is
+          // already handled by the _redMode takeover, so skip it there.
+          if (redHere == null) ...[
+            _personalState(context, st, mineTop),
+            const SizedBox(height: 12),
+          ],
+          // 2 — National hero (red takeover when a red alert touches my wilayas).
           if (redHere != null)
             _redMode(context, st, redHere)
           else
@@ -158,6 +173,19 @@ class HomeScreen extends StatelessWidget {
               iconFg: cs.onSecondary,
               trailing: Icon(Icons.chevron_right, color: cs.onSecondaryContainer.withValues(alpha: .7)),
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChatScreen()))),
+          const SizedBox(height: gap),
+          // Offline safety guides — core EWS value, works with no network.
+          _tile(context,
+              width: contentW,
+              icon: Icons.menu_book_outlined,
+              title: S.t(lang, 'consignes'),
+              subtitle: S.t(lang, 'tile_consignes_sub'),
+              bg: cs.primaryContainer,
+              fg: cs.onPrimaryContainer,
+              iconBg: cs.primary,
+              iconFg: cs.onPrimary,
+              trailing: Icon(Icons.chevron_right, color: cs.onPrimaryContainer.withValues(alpha: .7)),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ConsignesScreen()))),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 12),
             child: Text(S.t(lang, 'disclaimer'),
@@ -205,6 +233,37 @@ class HomeScreen extends StatelessWidget {
           child: Text(S.t(lang, 'update_btn'), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
         ),
       ]),
+    );
+  }
+
+  /// Red-tinted warning that a prerequisite for the siren is missing.
+  /// Tapping goes straight to Réglages, where the Fiabilité checklist fixes it.
+  Widget _reliabilityBanner(BuildContext context, AppState st) {
+    final lang = st.lang;
+    final v = vigilance('red', st.dark);
+    return InkWell(
+      onTap: () => goTo(3), // Réglages tab
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsetsDirectional.fromSTEB(16, 11, 10, 11),
+        decoration: BoxDecoration(color: v.container, borderRadius: BorderRadius.circular(20)),
+        child: Row(children: [
+          Icon(Icons.notifications_off_outlined, color: v.onContainer, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(S.t(lang, 'rel_warn'),
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: v.onContainer)),
+          ),
+          FilledButton(
+            onPressed: () => goTo(3),
+            style: FilledButton.styleFrom(
+                backgroundColor: v.solid, foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14), visualDensity: VisualDensity.compact),
+            child: Text(S.t(lang, 'rel_check'),
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+          ),
+        ]),
+      ),
     );
   }
 
@@ -293,6 +352,44 @@ class HomeScreen extends StatelessWidget {
           child: Container(width: 12, height: 12, decoration: BoxDecoration(color: dot(rl[r]!), shape: BoxShape.circle)),
         ),
     ]);
+  }
+
+  // The glanceable answer to "am I safe right now?" — green all-clear or the
+  // worst vigilance colour touching the user's own wilayas. Legible before any
+  // reading: big icon + colour + one line.
+  Widget _personalState(BuildContext context, AppState st, AlertItem? mineTop) {
+    final lang = st.lang;
+    final safe = mineTop == null;
+    final v = vigilance(safe ? 'green' : mineTop.color, st.dark);
+    final where = st.myWilayas.map(st.wilayaName).take(3).join(' · ');
+    return GestureDetector(
+      onTap: safe ? null : () => showAlertSheet(context, st, mineTop),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        decoration: BoxDecoration(color: v.container, borderRadius: BorderRadius.circular(24)),
+        child: Row(children: [
+          Icon(safe ? Icons.check_circle : Icons.warning_amber_rounded, color: v.solid, size: 30),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(
+                safe ? S.t(lang, 'all_ok_here') : '${S.t(lang, mineTop.color)} — ${S.t(lang, mineTop.hazard)}',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: v.onContainer, height: 1.15),
+              ),
+              if (where.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(where,
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: v.onContainer.withValues(alpha: .8))),
+                ),
+            ]),
+          ),
+          if (!safe) Icon(Icons.chevron_right, color: v.onContainer.withValues(alpha: .6)),
+        ]),
+      ),
+    );
   }
 
   Widget _hero(BuildContext context, AppState st, Snapshot snap) {

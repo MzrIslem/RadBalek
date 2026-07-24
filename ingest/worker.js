@@ -33,6 +33,7 @@ import {
 import { ADMIN_HTML } from "./src/adminui.js";
 import { handleWeather } from "./src/weather.js";
 import { handleChat, handleCategory } from "./src/ai.js";
+import { watchPipeline, watchStale } from "./src/watchdog.js";
 
 export default {
   async scheduled(_event, env, ctx) {
@@ -93,6 +94,11 @@ export default {
           return new Response("refresh failed: " + err.message, { status: 500, headers: corsHeaders() });
         }
       }
+      // Dead-man switch: app traffic is the heartbeat. If the stored snapshot
+      // has gone stale the cron is dead — and a dead cron cannot report itself.
+      // Regex, not JSON.parse: this runs on a hot path.
+      const gen = /"generatedAt":"([^"]+)"/.exec(body);
+      if (gen) ctx.waitUntil(watchStale(env, gen[1]));
       if (url.searchParams.get("lite")) body = liteSnapshot(body);
       return store(new Response(body, {
         headers: corsHeaders({
@@ -257,10 +263,12 @@ async function refresh(env, doPush = false) {
         await env.EWS_KV.put("push:last", JSON.stringify({ at: snap.generatedAt, ...pushSummary }));
       } catch {}
     }
+    await watchPipeline(env, snap, pushSummary);
   } catch (err) {
     try {
       await env.EWS_KV.put("push:last", JSON.stringify({ at: snap.generatedAt, fatal: String(err.message) }));
     } catch {}
+    await watchPipeline(env, snap, { fatal: String(err.message) });
   }
   return snap;
 }

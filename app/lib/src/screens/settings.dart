@@ -1,12 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api.dart';
 import '../app_state.dart';
 import '../strings.dart';
 import '../theme.dart';
+import '../widgets/reliability.dart';
 import 'feedback.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -100,47 +100,14 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 10),
                 Text('${S.t(lang, 'set_notif_note')} ${S.t(lang, 'quiet_note')}',
                     style: TextStyle(fontSize: 10.5, color: cs.onSurfaceVariant)),
-                if (!kIsWeb) ...[
-                  const SizedBox(height: 10),
-                  Wrap(spacing: 8, runSpacing: 8, children: [
-                    OutlinedButton.icon(
-                      onPressed: () => _openChannel('emergency_s2'),
-                      icon: const Icon(Icons.volume_up_outlined, size: 16),
-                      label: Text(S.t(lang, 'ch_red'), style: const TextStyle(fontSize: 11.5)),
-                    ),
-                    FilledButton.tonalIcon(
-                      onPressed: () async {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(S.t(lang, 'test_sending'))));
-                        final res = await st.sendTestPush();
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                        if (res == 'ok') {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(S.t(lang, 'test_ok'))));
-                        } else if (res == 'no-permission') {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text(S.t(lang, 'test_noperm')),
-                            action: SnackBarAction(label: S.t(lang, 'open'), onPressed: st.openAppNotifSettings),
-                            duration: const Duration(seconds: 8),
-                          ));
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('${S.t(lang, 'test_fail')} ($res)'),
-                            duration: const Duration(seconds: 6),
-                          ));
-                        }
-                      },
-                      icon: const Icon(Icons.notification_add_outlined, size: 16),
-                      label: Text(S.t(lang, 'test_btn'), style: const TextStyle(fontSize: 11.5)),
-                    ),
-                  ]),
-                ],
+                // The channel shortcut and the siren test now live in the
+                // Fiabilité checklist below, next to the state they verify.
               ])),
-              // --- Mode urgence (DND/silent bypass + voice announcements) ---
+              // --- Mode urgence: the Fiabilité checklist is the trust surface,
+              // so it leads the section and carries the live siren test.
               if (!kIsWeb)
                 section(S.t(lang, 'sec_emergency'), vigilance('red', st.dark).solid, Column(children: [
-                  _EmergencyCard(),
+                  const ReliabilityCard(showTest: true),
                   const SizedBox(height: 6),
                   divider,
                   SwitchListTile(
@@ -166,7 +133,25 @@ class SettingsScreen extends StatelessWidget {
               ])),
               // --- À propos ---
               section(S.t(lang, 'set_about'), cs.onSurfaceVariant, Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(S.t(lang, 'about_txt'), style: TextStyle(fontSize: 12.5, height: 1.5, color: cs.onSurfaceVariant)),
+                // Long-press = hidden creator mode: subscribes this device to
+                // the worker watchdog's backend-health alerts.
+                GestureDetector(
+                  onLongPress: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final on = await st.toggleCreatorMode();
+                    messenger.showSnackBar(SnackBar(
+                      content: Text(on ? '🛡️ Mode créateur activé — alertes backend' : 'Mode créateur désactivé'),
+                    ));
+                  },
+                  child: Text(S.t(lang, 'about_txt'),
+                      style: TextStyle(fontSize: 12.5, height: 1.5, color: cs.onSurfaceVariant)),
+                ),
+                if (st.creatorMode)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text('🛡️ Mode créateur — v${AppState.appVersion}',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: cs.primary)),
+                  ),
                 const SizedBox(height: 10),
                 Wrap(spacing: 8, runSpacing: 8, children: [
                   FilledButton.tonalIcon(
@@ -214,15 +199,7 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  static const _ch = MethodChannel('rb/channels');
-
   // (family editor is a separate stateful widget below)
-
-  Future<void> _openChannel(String id) async {
-    try {
-      await _ch.invokeMethod('openChannel', {'id': id});
-    } catch (_) {}
-  }
 
   // Compact searchable multi-select picker instead of a 58-chip wall.
   void _pickWilaya(BuildContext context, AppState st) {
@@ -402,69 +379,5 @@ class _SosEditorState extends State<_SosEditor> {
   }
 }
 
-class _EmergencyCard extends StatefulWidget {
-  @override
-  State<_EmergencyCard> createState() => _EmergencyCardState();
-}
-
-class _EmergencyCardState extends State<_EmergencyCard> with WidgetsBindingObserver {
-  Map<String, bool> _s = const {'dnd': false, 'battery': false};
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _refresh();
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState st) {
-    if (st == AppLifecycleState.resumed) _refresh();
-  }
-
-  Future<void> _refresh() async {
-    final st = context.read<AppState>();
-    final s = await st.emergencyStatus();
-    if (mounted) setState(() => _s = s);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final st = context.watch<AppState>();
-    final lang = st.lang;
-    final cs = Theme.of(context).colorScheme;
-    final green = vigilance('green', st.dark).solid;
-    final red = vigilance('red', st.dark).solid;
-
-    Widget row(String label, bool on, IconData icon, Future<void> Function() onTap) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(children: [
-            Icon(icon, size: 20, color: on ? green : red),
-            const SizedBox(width: 12),
-            Expanded(child: Text(label, style: const TextStyle(fontSize: 13))),
-            on
-                ? Text(S.t(lang, 'emg_on'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: green))
-                : FilledButton.tonal(
-                    onPressed: () async {
-                      await onTap();
-                    },
-                    style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
-                    child: Text(S.t(lang, 'emg_off'), style: const TextStyle(fontSize: 12)),
-                  ),
-          ]),
-        );
-
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(S.t(lang, 'emg_intro'), style: TextStyle(fontSize: 11.5, height: 1.5, color: cs.onSurfaceVariant)),
-      const SizedBox(height: 8),
-      row(S.t(lang, 'emg_dnd'), _s['dnd'] ?? false, Icons.do_not_disturb_on_outlined, st.requestDndAccess),
-      row(S.t(lang, 'emg_batt'), _s['battery'] ?? false, Icons.battery_saver_outlined, st.requestBatteryExempt),
-    ]);
-  }
-}
+// _EmergencyCard was replaced by widgets/reliability.dart ReliabilityCard,
+// which checks five prerequisites instead of two and carries the siren test.

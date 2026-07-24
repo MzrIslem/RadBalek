@@ -20,7 +20,7 @@ class AppState extends ChangeNotifier {
   final Api api;
   final bool autoRefresh;
 
-  static const appVersion = '0.9.7'; // keep in sync with pubspec version
+  static const appVersion = '1.0.0'; // keep in sync with pubspec version
 
   String lang = 'fr';
   bool dark = false;
@@ -172,6 +172,8 @@ class AppState extends ChangeNotifier {
         if (e.contains('|')) e.substring(0, e.indexOf('|')): e.substring(e.indexOf('|') + 1),
     };
     onboarded = p.getBool('rb_onboarded') ?? false;
+    reliabilityOk = p.getBool('rb_rel_ok'); // null until first native check
+    creatorMode = p.getBool('rb_creator') ?? false;
     myWilayas = (p.getStringList('rb_my') ?? ['16', '6']).map(int.parse).toList();
     final notifKeys = p.getStringList('rb_notif_off') ?? [];
     for (final k in notifKeys) {
@@ -277,6 +279,10 @@ class AppState extends ChangeNotifier {
     notifyListeners(); // single rebuild per cycle (audit app#6)
     unawaited(loadBoundaries().then((_) => locate()));
     unawaited(checkForUpdate());
+    // Re-verify the siren prerequisites (cheap native call). refresh() runs on
+    // launch and on resume, so an OEM revoking a permission surfaces on the
+    // home banner without the user ever opening Réglages.
+    unawaited(reliabilityStatus());
   }
 
   // ---- In-app update (pulls latest release info from the worker) ----
@@ -511,14 +517,82 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// {dnd: bool, battery: bool} — whether emergency prerequisites are granted.
-  Future<Map<String, bool>> emergencyStatus() async {
+  // ---- Creator mode (hidden): subscribes this device to backend health
+  // alerts from the worker's watchdog. Long-press "À propos" to toggle.
+  bool creatorMode = false;
+
+  Future<bool> toggleCreatorMode() async {
+    creatorMode = !creatorMode;
+    notifyListeners();
+    final p = await SharedPreferences.getInstance();
+    await p.setBool('rb_creator', creatorMode);
+    if (!kIsWeb) {
+      try {
+        final fm = FirebaseMessaging.instance;
+        if (creatorMode) {
+          await fm.subscribeToTopic('admin');
+        } else {
+          await fm.unsubscribeFromTopic('admin');
+        }
+      } catch (_) {}
+    }
+    return creatorMode;
+  }
+
+  /// Opens the system sound settings (to raise the alarm volume).
+  Future<void> openSoundSettings() async {
+    try {
+      await _ch.invokeMethod('openSoundSettings');
+    } catch (_) {}
+  }
+
+  /// Opens the emergency channel's own settings page.
+  Future<void> openEmergencyChannel() async {
+    try {
+      await _ch.invokeMethod('openChannelEmergency');
+    } catch (_) {}
+  }
+
+  /// Every switch that can silently stop a red alert from ringing:
+  /// {notifs, channel, battery, dnd: bool, volume: 0..1}.
+  /// Volume is a double — the others are booleans, hence the dynamic map.
+  Future<Map<String, dynamic>> reliabilityStatus() async {
+    if (kIsWeb) return const {};
     try {
       final r = await _ch.invokeMethod('emergencyStatus');
-      return {'dnd': r['dnd'] == true, 'battery': r['battery'] == true};
+      final s = {
+        'notifs': r['notifs'] == true,
+        'channel': r['channel'] == true,
+        'battery': r['battery'] == true,
+        'dnd': r['dnd'] == true,
+        'volume': (r['volume'] as num?)?.toDouble() ?? 1.0,
+      };
+      _cacheReliability(s);
+      return s;
     } catch (_) {
-      return {'dnd': false, 'battery': false};
+      return const {};
     }
   }
 
+  /// Backwards-compatible alias (older call sites want just the two flags).
+  Future<Map<String, bool>> emergencyStatus() async {
+    final s = await reliabilityStatus();
+    return {'dnd': s['dnd'] == true, 'battery': s['battery'] == true};
+  }
+
+  /// True when every prerequisite for a red alert to ring is satisfied.
+  /// Null until the first check — the UI shows no verdict rather than a
+  /// wrong one. Cached so the home banner can warn without a native round-trip.
+  bool? reliabilityOk;
+
+  void _cacheReliability(Map<String, dynamic> s) {
+    final ok = s['notifs'] == true &&
+        s['channel'] == true &&
+        s['battery'] == true &&
+        ((s['volume'] as num?)?.toDouble() ?? 1.0) >= 0.3;
+    if (ok == reliabilityOk) return;
+    reliabilityOk = ok;
+    SharedPreferences.getInstance().then((p) => p.setBool('rb_rel_ok', ok));
+    notifyListeners();
+  }
 }

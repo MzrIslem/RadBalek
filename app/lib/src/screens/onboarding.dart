@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/foundation.dart';
 import '../app_state.dart';
 import '../strings.dart';
 import '../theme.dart';
+import '../widgets/reliability.dart';
 
-/// First-run flow: language -> wilayas -> how alerts work.
+/// First-run flow: language -> wilayas -> how alerts work -> PROVE it rings.
+///
+/// The last step is the important one: an early-warning app that was never
+/// verified is a promise, not a safeguard. Setup ends with the real siren
+/// firing over the lockscreen, so the user has seen it work once.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -91,6 +97,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         const SizedBox(height: 10),
         Text(S.t(lang, 'disclaimer'), style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant)),
       ]),
+      // 4 — permissions + live siren proof-test (skipped on web, which has
+      // no notification channels, battery optimisation or alarm stream).
+      if (!kIsWeb)
+        ListView(padding: const EdgeInsets.all(24), children: [
+          header(Icons.verified_user_outlined, S.t(lang, 'onb_check')),
+          const ReliabilityCard(showTest: true),
+        ]),
     ];
 
     return Scaffold(
@@ -102,7 +115,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 6, 24, 18),
             child: Row(children: [
-              for (int i = 0; i < 3; i++)
+              for (int i = 0; i < pages.length; i++)
                 Container(
                   width: _page == i ? 22 : 8,
                   height: 8,
@@ -113,13 +126,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               const Spacer(),
               FilledButton(
                 onPressed: () {
-                  if (_page < 2) {
+                  if (_page < pages.length - 1) {
                     _ctl.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
                   } else {
                     st.finishOnboarding();
                   }
                 },
-                child: Text(_page < 2 ? '→' : S.t(lang, 'onb_done')),
+                child: Text(_page < pages.length - 1 ? '→' : S.t(lang, 'onb_done')),
               ),
             ]),
           ),

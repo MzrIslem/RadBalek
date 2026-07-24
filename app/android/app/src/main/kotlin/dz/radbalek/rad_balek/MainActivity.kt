@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -91,13 +92,30 @@ class MainActivity : FlutterActivity() {
                         result.success(false)
                     }
                 }
+                // Full reliability picture for the Fiabilité checklist: every
+                // switch an OEM or the user can silently flip that would keep
+                // a red alert from ringing.
                 "emergencyStatus" -> {
                     val nm = getSystemService(NotificationManager::class.java)
                     val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                    val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                    val channelOk = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val ch = nm.getNotificationChannel("emergency_s2")
+                        ch != null && ch.importance != NotificationManager.IMPORTANCE_NONE
+                    } else true
+                    val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+                    val vol = if (maxVol > 0) am.getStreamVolume(AudioManager.STREAM_ALARM).toDouble() / maxVol else 1.0
                     result.success(mapOf(
+                        "notifs" to nm.areNotificationsEnabled(),
+                        "channel" to channelOk,
+                        "battery" to pm.isIgnoringBatteryOptimizations(packageName),
                         "dnd" to (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || nm.isNotificationPolicyAccessGranted),
-                        "battery" to pm.isIgnoringBatteryOptimizations(packageName)
+                        "volume" to vol
                     ))
+                }
+                "openSoundSettings" -> {
+                    try { startActivity(Intent(Settings.ACTION_SOUND_SETTINGS)) } catch (_: Exception) {}
+                    result.success(true)
                 }
                 else -> result.notImplemented()
             }
