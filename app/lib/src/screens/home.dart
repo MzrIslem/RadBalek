@@ -9,6 +9,7 @@ import '../strings.dart';
 import '../theme.dart';
 import '../voice.dart';
 import '../widgets/sheets.dart';
+import '../widgets/transitions.dart';
 import 'chat.dart';
 import 'consignes.dart';
 import 'sections.dart';
@@ -65,7 +66,6 @@ class HomeScreen extends StatelessWidget {
       }
     }
     final alertActive = mineTop != null;
-    final target = mineTop ?? (snap.alerts.isEmpty ? null : snap.alerts.first);
 
     // Tile counts.
     final nearbyCount = st.reports.where((r) => r.wilaya != null && myCodes.contains(r.wilaya)).length;
@@ -138,21 +138,12 @@ class HomeScreen extends StatelessWidget {
             _reliabilityBanner(context, st),
             const SizedBox(height: 12),
           ],
-          // 1 — Personal "am I safe?" banner: the one-glance answer for MY
-          // wilayas (green all-clear vs the worst vigilance touching me). Red is
-          // already handled by the _redMode takeover, so skip it there.
-          if (redHere == null) ...[
-            _personalState(context, st, mineTop),
-            const SizedBox(height: 12),
-          ],
-          // 2 — National hero (red takeover when a red alert touches my wilayas).
+          // 1 — Unified status card: personal "am I safe?" + national context +
+          // local conditions, one glanceable card. Red gets the full takeover.
           if (redHere != null)
             _redMode(context, st, redHere)
           else
-            GestureDetector(
-              onTap: target == null ? null : () => showAlertSheet(context, st, target),
-              child: _hero(context, st, snap),
-            ),
+            _hero(context, st, snap, mineTop),
           const SizedBox(height: 12),
           // 2 — Emergency hotkeys + "I'm safe".
           _sos(context, st, safeProminent: alertActive),
@@ -172,7 +163,7 @@ class HomeScreen extends StatelessWidget {
               iconBg: cs.secondary,
               iconFg: cs.onSecondary,
               trailing: Icon(Icons.chevron_right, color: cs.onSecondaryContainer.withValues(alpha: .7)),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChatScreen()))),
+              onTap: () => Navigator.of(context).push(fluidRoute(const ChatScreen()))),
           const SizedBox(height: gap),
           // Offline safety guides — core EWS value, works with no network.
           _tile(context,
@@ -185,7 +176,7 @@ class HomeScreen extends StatelessWidget {
               iconBg: cs.primary,
               iconFg: cs.onPrimary,
               trailing: Icon(Icons.chevron_right, color: cs.onPrimaryContainer.withValues(alpha: .7)),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ConsignesScreen()))),
+              onTap: () => Navigator.of(context).push(fluidRoute(const ConsignesScreen()))),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 12),
             child: Text(S.t(lang, 'disclaimer'),
@@ -198,7 +189,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   void _open(BuildContext context, Widget page) =>
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+      Navigator.of(context).push(fluidRoute(page));
 
   Widget _updateBanner(BuildContext context, AppState st) {
     final lang = st.lang;
@@ -354,91 +345,77 @@ class HomeScreen extends StatelessWidget {
     ]);
   }
 
-  // The glanceable answer to "am I safe right now?" — green all-clear or the
-  // worst vigilance colour touching the user's own wilayas. Legible before any
-  // reading: big icon + colour + one line.
-  Widget _personalState(BuildContext context, AppState st, AlertItem? mineTop) {
+  // One unified status card: the personal "am I safe?" answer up top (tap for
+  // detail), the national picture as a context line, then local conditions —
+  // merged so the home leads with a single glance, not two stacked banners.
+  Widget _hero(BuildContext context, AppState st, Snapshot snap, AlertItem? mineTop) {
     final lang = st.lang;
     final safe = mineTop == null;
-    final v = vigilance(safe ? 'green' : mineTop.color, st.dark);
+    final v = vigilance(safe ? 'green' : mineTop.color, st.dark); // card colour = MY state
     final where = st.myWilayas.map(st.wilayaName).take(3).join(' · ');
-    return GestureDetector(
-      onTap: safe ? null : () => showAlertSheet(context, st, mineTop),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        decoration: BoxDecoration(color: v.container, borderRadius: BorderRadius.circular(24)),
-        child: Row(children: [
-          Icon(safe ? Icons.check_circle : Icons.warning_amber_rounded, color: v.solid, size: 30),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(
-                safe ? S.t(lang, 'all_ok_here') : '${S.t(lang, mineTop.color)} — ${S.t(lang, mineTop.hazard)}',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: v.onContainer, height: 1.15),
-              ),
-              if (where.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(where,
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: v.onContainer.withValues(alpha: .8))),
-                ),
-            ]),
-          ),
-          if (!safe) Icon(Icons.chevron_right, color: v.onContainer.withValues(alpha: .6)),
-        ]),
-      ),
-    );
-  }
-
-  Widget _hero(BuildContext context, AppState st, Snapshot snap) {
-    final lang = st.lang;
-    final top = snap.alerts.isEmpty ? null : snap.alerts.first;
-    // The hero speaks for the WHOLE country: lead with how many wilayas sit at
-    // the worst active level, not a single alert's name (the personal banner
-    // above already owns "what touches you" — repeating it here is noise).
+    // National context: how many wilayas sit at the worst active level.
     final reds = snap.wilayasWith('red').length;
     final oranges = snap.wilayasWith('orange').length;
     final yellows = snap.wilayasWith('yellow').length;
-    final color = reds > 0 ? 'red' : oranges > 0 ? 'orange' : yellows > 0 ? 'yellow' : 'green';
-    final worstN = color == 'red' ? reds : color == 'orange' ? oranges : yellows;
-    final v = vigilance(color, st.dark);
-    return Container(
+    final nat = reds > 0 ? 'red' : oranges > 0 ? 'orange' : yellows > 0 ? 'yellow' : 'green';
+    final natN = nat == 'red' ? reds : nat == 'orange' ? oranges : yellows;
+    final natHead = nat == 'green'
+        ? S.t(lang, 'no_alert')
+        : '$natN ${S.t(lang, 'wilayas_$nat')}${safe ? '' : ' · ${S.t(lang, 'until')} ${hhmm(mineTop.expires)}'}';
+    final natLine = '$natHead · ${S.t(lang, st.sourceStatus)} ${hhmm(snap.generatedAt)}';
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
       width: double.infinity,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(color: v.container, borderRadius: BorderRadius.circular(28)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
+        // Personal headline (tap → alert detail) + history.
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(safe ? Icons.check_circle : Icons.warning_amber_rounded, color: v.solid, size: 30),
+          const SizedBox(width: 12),
           Expanded(
-            child: Text('${S.t(lang, 'natl')} · ${S.t(lang, 'monitored')}'.toUpperCase(),
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.1,
-                    color: v.onContainer.withValues(alpha: .8))),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: safe ? null : () => showAlertSheet(context, st, mineTop),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(
+                  safe ? S.t(lang, 'all_ok_here') : '${S.t(lang, mineTop.color)} — ${S.t(lang, mineTop.hazard)}',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: v.onContainer, height: 1.15),
+                ),
+                if (where.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text('📍 $where',
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12.5, color: v.onContainer.withValues(alpha: .85))),
+                  ),
+              ]),
+            ),
           ),
+          const SizedBox(width: 6),
           InkWell(
             onTap: () => showHistorySheet(context, st),
             borderRadius: BorderRadius.circular(99),
-            child: Icon(Icons.history, size: 20, color: v.onContainer.withValues(alpha: .7)),
-          ),
-        ]),
-        const SizedBox(height: 8),
-        Row(children: [
-          Container(width: 15, height: 15, decoration: BoxDecoration(color: v.solid, borderRadius: BorderRadius.circular(5))),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Text(
-              color == 'green' ? S.t(lang, 'no_alert') : '$worstN ${S.t(lang, 'wilayas_$color')}',
-              style: TextStyle(fontSize: 25, fontWeight: FontWeight.w700, color: v.onContainer, height: 1.2),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(Icons.history, size: 20, color: v.onContainer.withValues(alpha: .7)),
             ),
           ),
         ]),
-        const SizedBox(height: 6),
-        Text(
-          top == null
-              ? '${S.t(lang, st.sourceStatus)} ${hhmm(snap.generatedAt)}'
-              : '${S.t(lang, 'until')} ${hhmm(top.expires)} · ${S.t(lang, st.sourceStatus)} ${hhmm(snap.generatedAt)}',
-          style: TextStyle(fontSize: 13, color: v.onContainer.withValues(alpha: .9)),
-        ),
+        const SizedBox(height: 12),
+        // National context line.
+        Row(children: [
+          Container(width: 10, height: 10,
+              decoration: BoxDecoration(color: vigilance(nat, st.dark).solid, borderRadius: BorderRadius.circular(3))),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(natLine.toUpperCase(),
+                maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, letterSpacing: .3,
+                    color: v.onContainer.withValues(alpha: .85))),
+          ),
+        ]),
         const SizedBox(height: 12),
         // Personal conditions for MY wilaya (GPS first): what the air actually
         // feels like right now — more actionable than a macro region strip.
@@ -456,12 +433,6 @@ class HomeScreen extends StatelessWidget {
           final arrow = trend == 'up' ? '↑' : trend == 'down' ? '↓' : '→';
 
           return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Padding(
-              padding: const EdgeInsetsDirectional.only(start: 2, bottom: 6),
-              child: Text('📍 ${st.wilayaName(code)}',
-                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700,
-                      color: v.onContainer.withValues(alpha: .9))),
-            ),
             // Uniform 3-column tiles in a centered grid — equal widths line up,
             // and the last row (2 tiles) is centered. dp-based, so it holds at
             // any screen density.

@@ -7,6 +7,7 @@ import '../app_state.dart';
 import '../strings.dart';
 import '../theme.dart';
 import '../widgets/reliability.dart';
+import '../widgets/transitions.dart';
 import 'feedback.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -156,7 +157,7 @@ class SettingsScreen extends StatelessWidget {
                 Wrap(spacing: 8, runSpacing: 8, children: [
                   FilledButton.tonalIcon(
                     onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const FeedbackScreen())),
+                        fluidRoute(const FeedbackScreen())),
                     icon: const Icon(Icons.rate_review_outlined, size: 17),
                     label: Text(S.t(lang, 'feedback'), style: const TextStyle(fontSize: 12.5)),
                   ),

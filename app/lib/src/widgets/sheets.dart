@@ -7,6 +7,7 @@ import '../models.dart';
 import '../strings.dart';
 import '../theme.dart';
 import '../screens/consignes.dart';
+import 'transitions.dart';
 
 String hhmm(String? iso) {
   if (iso == null || iso.isEmpty) return '';
@@ -133,7 +134,7 @@ void showAlertSheet(BuildContext context, AppState st, AlertItem a) {
                   onPressed: () {
                     Navigator.of(ctx).pop();
                     Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => ConsignesScreen(focusHazard: a.hazard)));
+                        fluidRoute(ConsignesScreen(focusHazard: a.hazard)));
                   },
                   icon: const Icon(Icons.menu_book_outlined),
                   label: Text(S.t(lang, 'consignes')),

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../strings.dart';
 import '../widgets/sheets.dart';
+import '../widgets/transitions.dart';
 import 'chat.dart';
 import 'home.dart';
 import 'map.dart';
@@ -55,6 +56,15 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       2 => const SettingsScreen(),
       _ => HomeScreen(goTo: (i) => setState(() => _index = i)),
     };
+    // Soft cross-fade between tabs — a light touch of fluidity, no gesture
+    // conflict with the map's own pan/zoom (which a swipe-nav would fight).
+    final animatedBody = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 190),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
+      child: KeyedSubtree(key: ValueKey(_index), child: body),
+    );
 
     final destinations = [
       (Icons.notifications_outlined, Icons.notifications, S.t(lang, 'nav_alerts')),
@@ -107,7 +117,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         ),
         IconButton(
           tooltip: S.t(lang, 'assistant'),
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChatScreen())),
+          onPressed: () => Navigator.of(context).push(fluidRoute(const ChatScreen())),
           icon: const Icon(Icons.auto_awesome_outlined),
         ),
         IconButton(
@@ -132,13 +142,13 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
                 NavigationRailDestination(icon: Icon(o), selectedIcon: Icon(f), label: Text(l))],
             ),
             const VerticalDivider(width: 1),
-            Expanded(child: body),
+            Expanded(child: animatedBody),
           ]),
         );
       }
       return Scaffold(
         appBar: appBar,
-        body: body,
+        body: animatedBody,
         bottomNavigationBar: NavigationBar(
           selectedIndex: navIndex(),
           onDestinationSelected: onSelect,
