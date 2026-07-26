@@ -119,6 +119,10 @@ class AlertActivity : Activity() {
                 .getString("flutter.rb_lang", "fr") == "ar"
         } catch (_: Exception) { false }
         root.addView(bigBtn(if (isAr) "📞  اتصل بالرقم 14" else "📞  APPELER LE 14", "#FFFFFF", "#B3120E") {
+            // stopAll() FIRST: without it the siren kept looping at 85% alarm
+            // volume over the call, so the caller could neither hear Protection
+            // Civile nor be heard. The other two buttons already did this.
+            stopAll()
             startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:14")))
         })
         root.addView(bigBtn(if (isAr) "عرض التعليمات" else "Voir les consignes", "#7A0C0A", "#FFFFFF") {
@@ -133,10 +137,19 @@ class AlertActivity : Activity() {
     private fun startSiren() {
         try {
             val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            val max = am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
-            val cur = am.getStreamVolume(AudioManager.STREAM_ALARM)
-            Log.i("RBSIREN", "alarm vol $cur/$max ringerMode=${am.ringerMode}")
-            if (cur < (max * 0.6).toInt()) am.setStreamVolume(AudioManager.STREAM_ALARM, (max * 0.85).toInt(), 0)
+            // Raising the volume MUST NOT be able to prevent the siren from
+            // starting. setStreamVolume throws SecurityException when the change
+            // would unmute a zen-muted stream without granted notification-policy
+            // access — i.e. exactly the phone-in-DND-at-3am case. Sharing one try
+            // with the MediaPlayer below meant the red alert appeared SILENTLY.
+            try {
+                val max = am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+                val cur = am.getStreamVolume(AudioManager.STREAM_ALARM)
+                Log.i("RBSIREN", "alarm vol $cur/$max ringerMode=${am.ringerMode}")
+                if (cur < (max * 0.6).toInt()) am.setStreamVolume(AudioManager.STREAM_ALARM, (max * 0.85).toInt(), 0)
+            } catch (e: Exception) {
+                Log.e("RBSIREN", "volume raise failed (continuing to siren): ${e.message}")
+            }
 
             val attrs = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ALARM)
@@ -215,8 +228,14 @@ class AlertActivity : Activity() {
         s.replace(Regex("[\\p{So}\\p{Cn}]"), " ").replace("—", " ").replace(Regex("\\s+"), " ").trim()
 
     private fun stopAll() {
-        try { player?.stop(); player?.release() } catch (_: Exception) {}
+        // Separate try per call — see RbMessagingService.stopSiren(): if stop()
+        // throws (player still preparing), release() must still run or a looping
+        // alarm-stream siren is orphaned with its reference dropped.
+        val p = player
         player = null
+        try { p?.setOnPreparedListener(null) } catch (_: Exception) {}
+        try { p?.stop() } catch (_: Exception) {}
+        try { p?.release() } catch (_: Exception) {}
         try { tts?.stop(); tts?.shutdown() } catch (_: Exception) {}
         tts = null
         try {
@@ -224,6 +243,15 @@ class AlertActivity : Activity() {
             focus?.let { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) am.abandonAudioFocusRequest(it) }
         } catch (_: Exception) {}
         try { (getSystemService(Context.VIBRATOR_SERVICE) as Vibrator).cancel() } catch (_: Exception) {}
+    }
+
+    // HOME (or any app switch) reaches onStop, NOT onDestroy — and
+    // excludeFromRecents means there is no way back to the "Arrêter la sirène"
+    // button, so the siren looped forever and force-stop was the user's only
+    // escape (which breaks FCM delivery on Chinese OEMs). Stop and finish.
+    override fun onStop() {
+        if (!isFinishing) { stopAll(); finish() }
+        super.onStop()
     }
 
     override fun onDestroy() { stopAll(); super.onDestroy() }

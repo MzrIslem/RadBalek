@@ -29,21 +29,40 @@ class RbMessagingService : FlutterFirebaseMessagingService() {
         private val handler = Handler(Looper.getMainLooper())
 
         /// Called from MainActivity.onResume — opening the app stops the wail.
+        /// stop() and release() MUST be in separate try blocks: stop() throws
+        /// IllegalStateException if the player is still preparing (which is
+        /// exactly what happens when AlertActivity launches and calls this
+        /// mid-prepareAsync). Sharing one try skipped release() while the
+        /// reference was dropped, leaving a looping alarm-stream siren that no
+        /// code could ever reach — only a force-stop silenced it, and a
+        /// force-stop breaks FCM delivery on Xiaomi/Oppo.
         fun stopSiren() {
             handler.removeCallbacksAndMessages(null)
-            try {
-                player?.stop()
-                player?.release()
-            } catch (_: Exception) {}
+            val p = player
             player = null
+            try { p?.setOnPreparedListener(null) } catch (_: Exception) {}
+            try { p?.stop() } catch (_: Exception) {}
+            try { p?.release() } catch (_: Exception) {}
         }
     }
 
     override fun onMessageReceived(msg: RemoteMessage) {
         try {
             val d = msg.data
-            if (d["color"] == "red") showRed(d)
-        } catch (_: Exception) {}
+            // Gate on kind as well as colour. The 3-hourly "toujours actif"
+            // heartbeat carries color:"red" (push.js) but is meant to be
+            // non-intrusive; colour alone made it force alarm volume to 80% and
+            // re-fire the siren + lockscreen takeover up to 4x per alert
+            // whenever the app was in the foreground — which is precisely when
+            // people keep it open during a red alert. Testers who get screamed
+            // at turn notifications off, and then miss the real one.
+            val kind = d["kind"] ?: "alert"
+            if (d["color"] == "red" && (kind == "alert" || kind == "self-test")) showRed(d)
+        } catch (e: Throwable) {
+            // Red is data-only: nothing else will display it, so a swallowed
+            // failure here is an alert that vanishes without a trace. Log it.
+            android.util.Log.e("RBSIREN", "showRed failed", e)
+        }
         super.onMessageReceived(msg) // Dart side (refresh, voice, banner)
     }
 

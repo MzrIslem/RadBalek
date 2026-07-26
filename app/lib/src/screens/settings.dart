@@ -89,7 +89,7 @@ class SettingsScreen extends StatelessWidget {
                 Padding(padding: const EdgeInsets.only(left: 4, bottom: 8),
                     child: Text(S.t(lang, 'set_notif'), style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant))),
                 Wrap(spacing: 7, runSpacing: 7, children: [
-                  for (final h in const ['heat', 'fire', 'flood', 'quake', 'storm', 'wind', 'sandstorm', 'road'])
+                  for (final h in const ['heat', 'fire', 'flood', 'quake', 'storm', 'wind', 'sandstorm', 'cold', 'road'])
                     FilterChip(
                       showCheckmark: false,
                       avatar: Icon(hazardIcon(h), size: 15),

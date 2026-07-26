@@ -233,7 +233,7 @@ class HomeScreen extends StatelessWidget {
     final lang = st.lang;
     final v = vigilance('red', st.dark);
     return InkWell(
-      onTap: () => goTo(3), // Réglages tab
+      onTap: () => goTo(2), // Réglages tab
       borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsetsDirectional.fromSTEB(16, 11, 10, 11),
@@ -246,7 +246,7 @@ class HomeScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: v.onContainer)),
           ),
           FilledButton(
-            onPressed: () => goTo(3),
+            onPressed: () => goTo(2),
             style: FilledButton.styleFrom(
                 backgroundColor: v.solid, foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 14), visualDensity: VisualDensity.compact),
@@ -294,40 +294,38 @@ class HomeScreen extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(22),
-        child: Container(
-          height: 116,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: tileBg,
-            borderRadius: BorderRadius.circular(22),
-            border: bg == null ? Border.all(color: cs.outlineVariant) : null,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(color: circleBg, shape: BoxShape.circle),
-                  child: Icon(icon, color: circleFg, size: 23),
-                ),
-                if (trailing != null)
-                  trailing
-                else if (count != null)
-                  Text(count, style: TextStyle(fontSize: 27, fontWeight: FontWeight.w800, height: 1, color: tileFg)),
-              ]),
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child: Container(
+            padding: const EdgeInsetsDirectional.fromSTEB(16, 14, 16, 14),
+            decoration: BoxDecoration(
+              color: tileBg,
+              borderRadius: BorderRadius.circular(22),
+              border: bg == null ? Border.all(color: cs.outlineVariant) : null,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, crossAxisAlignment: CrossAxisAlignment.center, children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(color: circleBg, shape: BoxShape.circle),
+                    child: Icon(icon, color: circleFg, size: 22),
+                  ),
+                  if (trailing != null)
+                    trailing
+                  else if (count != null)
+                    Text(count, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, height: 1, color: tileFg)),
+                ]),
+                const SizedBox(height: 10),
                 Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: tileFg)),
+                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: tileFg, height: 1.2)),
                 const SizedBox(height: 2),
                 Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11.5, color: tileFg.withValues(alpha: .72))),
-              ]),
-            ],
+                    style: TextStyle(fontSize: 11.5, color: tileFg.withValues(alpha: .72), height: 1.2)),
+              ],
+            ),
           ),
-        ),
       ),
     );
   }

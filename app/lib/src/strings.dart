@@ -28,6 +28,7 @@ class S {
       'source': 'Source',
       'call': 'Appeler le 14',
       'live': 'en direct',
+      'cached': 'en cache',
       'offline': 'hors ligne',
       'updated': 'mis à jour',
       'red': 'Vigilance rouge',
@@ -39,6 +40,9 @@ class S {
       'sandstorm': 'Tempête de sable',
       'flood': 'Pluies/Inondations',
       'cold': 'Froid/Neige',
+      // Catch-all hazard from the ONM feed (brouillard, fortes vagues, verglas…).
+      // Without it the UI and the TTS said the literal token "other".
+      'other': 'Phénomène dangereux',
       'fire': 'Feu de forêt',
       'road': 'Accident de la route',
       'sat': 'Point chaud satellite',
@@ -250,6 +254,7 @@ class S {
       'source': 'Source',
       'call': 'Call 14',
       'live': 'live',
+      'cached': 'cached',
       'offline': 'offline',
       'updated': 'updated',
       'red': 'Red alert',
@@ -261,6 +266,7 @@ class S {
       'sandstorm': 'Sandstorm',
       'flood': 'Rain/Flooding',
       'cold': 'Cold/Snow',
+      'other': 'Hazardous conditions',
       'fire': 'Wildfire',
       'road': 'Road crash',
       'sat': 'Satellite hotspot',
@@ -471,6 +477,7 @@ class S {
       'source': 'المصدر',
       'call': 'اتصل بـ 14',
       'live': 'مباشر',
+      'cached': 'مخزَّن',
       'offline': 'دون اتصال',
       'updated': 'آخر تحديث',
       'red': 'تحذير أحمر',
@@ -482,6 +489,7 @@ class S {
       'sandstorm': 'عاصفة رملية',
       'flood': 'أمطار وفيضانات',
       'cold': 'برد وثلوج',
+      'other': 'ظاهرة خطرة',
       'fire': 'حريق غابة',
       'road': 'حادث مرور',
       'sat': 'نقطة حرارية (قمر صناعي)',
@@ -686,6 +694,7 @@ class S {
         'Éloignez le bétail des lits d’oueds',
       ],
       'cold': ['Limitez les déplacements sur routes verglacées', 'Chauffez sans obstruer la ventilation (risque CO)', 'Protégez les personnes vulnérables du froid'],
+      'other': ['Suivez les consignes des autorités', 'Évitez la zone concernée et les déplacements inutiles', 'Restez informé (radio, ONM, Protection Civile)', 'Urgence : appelez le 14'],
       'quake': ['Baissez-vous, abritez-vous sous une table, accrochez-vous', 'Éloignez-vous des fenêtres et des façades', 'Après la secousse : sortez vers un espace dégagé, sans ascenseur', 'Préparez-vous à des répliques'],
     },
     'en': {
@@ -695,6 +704,7 @@ class S {
       'sandstorm': ['Close doors and windows', 'Wear a mask outdoors', 'Slow down, lights on'],
       'flood': ['Never cross a flooded oued, on foot or by car', 'Stay away from riverbeds and low areas', 'Postpone travel during heavy rain', 'Move livestock away from oued beds'],
       'cold': ['Limit travel on icy roads', 'Heat safely, keep ventilation clear (CO risk)', 'Protect vulnerable people from the cold'],
+      'other': ['Follow the instructions of the authorities', 'Avoid the affected area and unnecessary travel', 'Stay informed (radio, ONM, Civil Protection)', 'Emergency: call 14'],
       'quake': ['Drop, cover under a table, hold on', 'Stay away from windows and facades', 'After shaking: move to open space, never the elevator', 'Expect aftershocks'],
     },
     'ar': {
@@ -704,14 +714,19 @@ class S {
       'sandstorm': ['أغلق الأبواب والنوافذ', 'ارتدِ كمامة في الخارج', 'خفف السرعة وأشعل الأضواء'],
       'flood': ['لا تعبر واديًا في حالة فيضان أبدًا، مشيًا أو بالسيارة', 'ابتعد عن مجاري الوديان والمناطق المنخفضة', 'أجّل التنقل أثناء الأمطار الغزيرة', 'أبعد المواشي عن مجاري الوديان'],
       'cold': ['قلل من التنقل على الطرق المتجمدة', 'دفّئ المنزل مع تهوية كافية (خطر الغاز)', 'احمِ الأشخاص الهشين من البرد'],
+      'other': ['اتبع تعليمات السلطات', 'تجنّب المنطقة المعنية والتنقل غير الضروري', 'ابقَ على اطلاع (الراديو، الأرصاد الجوية، الحماية المدنية)', 'للطوارئ: اتصل بالرقم 14'],
       'quake': ['انبطح، احتمِ تحت طاولة، تمسّك', 'ابتعد عن النوافذ والواجهات', 'بعد الهزة: اخرج إلى مكان مكشوف دون استعمال المصعد', 'توقّع هزات ارتدادية'],
     },
   };
 
   static String t(String lang, String key) => _s[lang]?[key] ?? _s['fr']![key] ?? key;
 
+  // Fall back to GENERIC authority-following advice, never to a specific
+  // hazard's. This used to fall back to 'heat', so a red fog/black-ice/waves
+  // alert (hazard "other") told the user to drink water and avoid the sun —
+  // wrong guidance presented as official, and shared onward via Partager.
   static List<String> actions(String lang, String hazard) =>
-      _acts[lang]?[hazard] ?? _acts[lang]?['heat'] ?? _acts['fr']!['heat']!;
+      _acts[lang]?[hazard] ?? _acts[lang]?['other'] ?? _acts['fr']!['other']!;
 
   static String impact(String lang, String hazard) => t(lang, 'imp_$hazard');
 }

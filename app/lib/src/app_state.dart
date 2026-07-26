@@ -20,14 +20,20 @@ class AppState extends ChangeNotifier {
   final Api api;
   final bool autoRefresh;
 
-  static const appVersion = '1.0.0'; // keep in sync with pubspec version
+  static const appVersion = '1.0.1'; // keep in sync with pubspec version
 
   String lang = 'fr';
   bool dark = false;
   List<int> myWilayas = [16, 6];
+  // MUST cover every hazard `hazardFromEvent` can emit (ingest/src/capfeed.js) —
+  // this map's keys are the ONLY source of FCM topic names, so a hazard missing
+  // here means a red alert for it is published to a topic nobody subscribes to.
+  // `cold` and `other` were missing: a red Froid/Neige vigilance, or any ONM
+  // event whose wording matches none of the regexes (fog, waves, black ice),
+  // reached zero devices. `other` is a catch-all and stays on (no chip).
   Map<String, bool> notif = {
     'heat': true, 'storm': true, 'flood': true, 'wind': true, 'sandstorm': true, 'fire': true, 'road': true,
-    'quake': true,
+    'quake': true, 'cold': true, 'other': true,
   };
 
   Snapshot? snapshot;
@@ -230,6 +236,18 @@ class AppState extends ChangeNotifier {
       _fcmReady = token != null;
       fcmDiag = token == null ? 'no-token' : (notifGranted ? 'ready' : 'no-permission');
       if (token != null) await syncTopics();
+      // Tokens rotate (app reinstall, storage wipe, App Check rollback, etc.).
+      // A rotated token is subscribed to NOTHING until we resubscribe: the diff
+      // in _syncTopicsOnce is token-agnostic, so it would compute an empty diff
+      // and the device would never receive another alert. _syncTopicsOnce keys
+      // its cache on the token to force a full resubscribe. Also re-arm
+      // _fcmReady here: if the initial getToken() timed out, this listener is
+      // the only path back to a working subscription.
+      FirebaseMessaging.instance.onTokenRefresh.listen((t) {
+        _fcmReady = t.isNotEmpty;
+        if (fcmDiag == 'no-token') fcmDiag = notifGranted ? 'ready' : 'no-permission';
+        syncTopics();
+      });
       notifyListeners();
     } catch (e) {
       fcmDiag = 'error: ${e.toString().split('\n').first}';
@@ -445,8 +463,14 @@ class AppState extends ChangeNotifier {
     }
     try {
       final p = await SharedPreferences.getInstance();
-      final previous = (p.getStringList('rb_topics') ?? []).toSet();
       final fm = FirebaseMessaging.instance;
+      // rb_topics records what THIS token is subscribed to. FCM subscriptions
+      // are per-token, so when the token rotates the stored set is meaningless
+      // — treat it as empty and resubscribe everything, or the new token stays
+      // subscribed to nothing forever (silent device, all UI looking correct).
+      final token = await fm.getToken().timeout(const Duration(seconds: 12), onTimeout: () => null);
+      final sameToken = token != null && p.getString('rb_topics_token') == token;
+      final previous = sameToken ? (p.getStringList('rb_topics') ?? []).toSet() : <String>{};
       for (final t in previous.difference(desired)) {
         await fm.unsubscribeFromTopic(t);
       }
@@ -454,6 +478,7 @@ class AppState extends ChangeNotifier {
         await fm.subscribeToTopic(t);
       }
       await p.setStringList('rb_topics', desired.toList());
+      if (token != null) await p.setString('rb_topics_token', token);
     } catch (_) {}
   }
 

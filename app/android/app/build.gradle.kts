@@ -48,10 +48,18 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (keystorePropertiesFile.exists())
-                signingConfigs.getByName("release")
-            else
-                signingConfigs.getByName("debug")
+            // Never silently fall back to the debug key: that produced an APK
+            // that installs but can never be updated by the real key
+            // (INSTALL_FAILED_UPDATE_INCOMPATIBLE for every tester). Fail loudly
+            // instead — key.properties is gitignored, so a clean clone hits this.
+            if (!keystorePropertiesFile.exists()) {
+                throw org.gradle.api.GradleException(
+                    "android/key.properties missing — refusing to build a debug-signed release. " +
+                    "It is gitignored by design; restore it (keyAlias/keyPassword/storeFile/storePassword) " +
+                    "alongside radbalek-release.jks before shipping."
+                )
+            }
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
