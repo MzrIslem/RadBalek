@@ -27,7 +27,7 @@ async function notifyAdmin(env, kind, title, body) {
   try {
     const sa = JSON.parse(env.FIREBASE_SA);
     const at = await getAccessToken(sa, env);
-    await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
+    const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
       method: "POST",
       headers: { authorization: `Bearer ${at}`, "content-type": "application/json" },
       body: JSON.stringify({
@@ -41,6 +41,9 @@ async function notifyAdmin(env, kind, title, body) {
         },
       }),
     });
+    // Don't claim success (and don't burn the 1h cooldown) on a failed send —
+    // that suppressed the retry for an hour while reporting delivered.
+    if (!res.ok) return false;
     try {
       await env.EWS_KV.put(flag, "1", { expirationTtl: COOLDOWN_S });
     } catch {} // cooldown is best-effort; worst case one extra push
@@ -65,8 +68,18 @@ export async function watchPipeline(env, snap, pushSummary) {
       await notifyAdmin(env, "sources", "⚠️ Rad Balek — sources en panne",
         `${names.length}/7 sources échouent : ${names.join(", ")}`);
     }
-    if (pushSummary && pushSummary.fatal) {
-      await notifyAdmin(env, "push", "🔴 Rad Balek — envoi des alertes en panne", pushSummary.fatal);
+    // A cycle where EVERY send failed does not throw — sendPush returns
+    // normally with a populated errors[] and no `fatal`, so this was completely
+    // invisible: up to 55 min of total delivery blackout with nobody paged.
+    if (pushSummary && (pushSummary.fatal || (!pushSummary.sent && (pushSummary.errors || []).length >= 3))) {
+      await notifyAdmin(env, "push", "🔴 Rad Balek — envoi des alertes en panne",
+        pushSummary.fatal || `0 envoyé, ${(pushSummary.errors || []).length} erreurs : ${JSON.stringify((pushSummary.errors || []).slice(0, 2))}`);
+    }
+    // ONM parsed but yielded nothing = markup drift. This is also the exact
+    // state that used to fire a false all-clear to every wilaya.
+    if (snap.stats && snap.stats.onmEntries > 0 && snap.stats.activeAlerts === 0) {
+      await notifyAdmin(env, "parse", "⚠️ Rad Balek — flux ONM illisible",
+        `${snap.stats.onmEntries} entrées, 0 alerte active — le parsing a dérivé.`);
     }
   } catch {}
 }

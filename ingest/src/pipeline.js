@@ -96,9 +96,22 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
   }
 
   for (const q of quakes) {
-    const w = resolveWilaya(q.lat, q.lon);
+    // Offshore epicentres lie outside every wilaya polygon AND outside the 0.5°
+    // nearest-centre fallback, so they resolved to null — and a null wilaya
+    // meant NO red alert was ever created, for precisely the geometry that
+    // produces Algeria's damaging quakes (the northern marine margin). Widen
+    // the radius for northern/marine points only; CRAAG is the last resort.
+    const w =
+      resolveWilaya(q.lat, q.lon) ||
+      (q.lat > 36.0 ? resolveWilaya(q.lat, q.lon, 1.5) : null) ||
+      q.wilaya ||
+      null;
     // Felt quakes (M>=4.5, <6h old) escalate to a pushable red alert.
     const quakeAge = Date.now() - Date.parse(q.time);
+    // Quantise to the minute: onset/expires ARE the push dedupe identity, and
+    // EMSC vs USGS report the same event's origin time seconds apart — so an
+    // EMSC timeout that failed over to USGS re-sirened the same earthquake.
+    const qT0 = Math.round(Date.parse(q.time) / 60000) * 60000;
     if (q.mag >= 4.5 && w && quakeAge < 6 * 3600 * 1000) {
       alerts.push({
         id: `${q.id}:alert`,
@@ -111,8 +124,8 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
         color: "red",
         urgency: "Immediate",
         certainty: "Observed",
-        onset: q.time,
-        expires: new Date(Date.parse(q.time) + 6 * 3600 * 1000).toISOString(),
+        onset: new Date(qT0).toISOString(),
+        expires: new Date(qT0 + 6 * 3600 * 1000).toISOString(),
         wilayas: [{ code: w.code, fr: w.fr, ar: w.ar }],
         lat: q.lat,
         lon: q.lon,
@@ -123,8 +136,8 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
         },
       });
     }
-    // CRAAG (official national authority) may name the wilaya EMSC left blank.
-    const place = w || q.wilaya || null;
+    // w already falls back through the widened radius and CRAAG's wilaya.
+    const place = w;
     incidents.push({
       id: q.id,
       class: "incident",

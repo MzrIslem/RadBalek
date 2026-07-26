@@ -138,7 +138,10 @@ function messageFor(alert, topic) {
 }
 
 // notifications: [{topic, alertId}] from the pipeline; alerts: snapshot alerts.
-export async function sendPush(env, notifications, alerts) {
+// errors/onmEntries: a DEGRADED cycle (the official ONM feed failed or came
+// back empty) must never run the all-clear diff — an empty alert list is not
+// evidence that hazards ended.
+export async function sendPush(env, notifications, alerts, errors = [], onmEntries = 1) {
   const summary = { sent: 0, deduped: 0, yellowSkipped: 0, errors: [] };
   if (!env.FIREBASE_SA) return { ...summary, disabled: true };
   let sa;
@@ -149,7 +152,13 @@ export async function sendPush(env, notifications, alerts) {
   }
   const byId = new Map(alerts.map((a) => [a.id, a]));
   const now = Date.now();
-  const sentRaw = (await env.EWS_KV.get("sentmap")) || "{}";
+  // Guarded: this is the FIRST statement of the delivery path. An unguarded KV
+  // read here threw on a quota 429 and killed every push for the rest of the
+  // day. Losing the dedupe map costs a duplicate; losing the cycle costs lives.
+  let sentRaw = "{}";
+  try {
+    sentRaw = (await env.EWS_KV.get("sentmap")) || "{}";
+  } catch {}
   let sentMap = {};
   try {
     sentMap = JSON.parse(sentRaw);
@@ -164,6 +173,12 @@ export async function sendPush(env, notifications, alerts) {
   );
 
   let token = null;
+  // Topics actually DELIVERED this cycle (sent now, or deduped because an
+  // earlier cycle delivered them). The all-clear diff must use this, not the
+  // list of topics we merely intended to send: capped/failed sends were being
+  // banked as "active", then later announced as finished to users who were
+  // never notified in the first place.
+  const delivered = new Set();
   for (const n of ordered) {
     if (summary.sent >= MAX_SENDS_PER_CYCLE) break;
     const alert = byId.get(n.alertId);
@@ -178,6 +193,7 @@ export async function sendPush(env, notifications, alerts) {
     const sentKey = `${n.topic}:${alert.onset || ""}:${alert.expires || ""}`;
     if (sentMap[sentKey]) {
       summary.deduped++;
+      delivered.add(n.topic); // delivered on an earlier cycle — still active
       continue;
     }
     try {
@@ -187,9 +203,18 @@ export async function sendPush(env, notifications, alerts) {
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify(messageFor(alert, n.topic)),
       });
+      // A stale cached OAuth token made every send 401 for up to 55 minutes
+      // (total blackout) because nothing ever invalidated the cache.
+      if (res.status === 401 || res.status === 403) {
+        try {
+          await env.EWS_KV.delete("fcm_token");
+        } catch {}
+        token = null;
+      }
       if (!res.ok) throw new Error(`FCM HTTP ${res.status}: ${(await res.text()).slice(0, 160)}`);
       summary.sent++;
       sentMap[sentKey] = now + SENT_TTL_MS;
+      delivered.add(n.topic);
     } catch (err) {
       summary.errors.push({ topic: n.topic, error: String(err.message).slice(0, 200) });
       if (summary.errors.length >= 5) break; // credentials/API/limit problem — stop the cycle
@@ -238,12 +263,22 @@ export async function sendPush(env, notifications, alerts) {
 
   // --- all-clear: topics active last cycle but no longer alerting → green ---
   summary.allclear = 0;
-  const currentTopics = new Set(notifications.map((n) => n.topic));
-  const prevRaw = (await env.EWS_KV.get("activetopics")) || "[]";
+  const currentTopics = delivered;
+  let prevRaw = "[]";
+  try {
+    prevRaw = (await env.EWS_KV.get("activetopics")) || "[]";
+  } catch {}
   let prevTopics = [];
   try {
     prevTopics = JSON.parse(prevRaw);
   } catch {}
+  // DEGRADED CYCLE: if the ONM fetch failed (or returned nothing), `alerts` is
+  // empty for a reason that has nothing to do with hazards ending — every
+  // active topic would diff out and get "✅ Fin d'alerte" mid-emergency, and
+  // the re-send would then be suppressed by sentmap. Skip the diff entirely and
+  // leave activetopics untouched so the state survives the blip.
+  const degraded = (errors || []).some((e) => e.source === "onm") || !onmEntries;
+  if (degraded) summary.allclearSkipped = true;
   const HAZ = {
     heat: ["Canicule", "موجة الحر"],
     storm: ["Orages", "العواصف الرعدية"],
@@ -252,9 +287,16 @@ export async function sendPush(env, notifications, alerts) {
     flood: ["Inondations", "الفيضانات"],
     fire: ["Feu de forêt", "حريق الغابة"],
     quake: ["Séisme", "الزلزال"],
+    cold: ["Froid/Neige", "البرد والثلوج"],
+    road: ["Route", "الطريق"],
     other: ["Alerte", "التحذير"],
   };
-  for (const topic of prevTopics.filter((t) => !currentTopics.has(t)).slice(0, 20)) {
+  // Topics that still need an all-clear after this cycle (over the 20/cycle cap,
+  // or whose send failed). They stay in activetopics so the diff survives and
+  // they are retried, instead of being dropped and never all-cleared at all.
+  const stale = degraded ? [] : prevTopics.filter((t) => !currentTopics.has(t));
+  const carry = new Set(stale.slice(20));
+  for (const topic of stale.slice(0, 20)) {
     const m = topic.match(/^w(\d+)_(\w+)_(\w+)$/);
     if (!m) continue;
     const [, code, hazard] = m;
@@ -278,18 +320,28 @@ export async function sendPush(env, notifications, alerts) {
         }),
       });
       if (res.ok) summary.allclear++;
+      else carry.add(topic); // retry next cycle instead of losing it silently
     } catch (err) {
+      carry.add(topic);
       summary.errors.push({ topic, error: "allclear " + String(err.message).slice(0, 100) });
     }
   }
   // Write-on-change only: most cycles nothing moved, and KV writes are the
   // metered resource (1k/day free) — not reads.
+  // SEPARATE try blocks, dedupe FIRST: these used to share one try with the
+  // cosmetic activetopics write attempted first, so a single quota 429 on it
+  // skipped the sentmap put entirely — losing the dedupe map and re-firing the
+  // red siren every 10 minutes until the quota reset.
   try {
-    const topicsOut = JSON.stringify([...currentTopics]);
-    if (topicsOut !== prevRaw) await env.EWS_KV.put("activetopics", topicsOut);
-
     const sentOut = JSON.stringify(sentMap);
     if (sentOut !== sentRaw) await env.EWS_KV.put("sentmap", sentOut);
   } catch {} // dedupe persistence is best-effort — never fail the cycle
+  if (!degraded) {
+    try {
+      // .sort() so a reordered ONM batch doesn't trigger a pointless write.
+      const topicsOut = JSON.stringify([...new Set([...currentTopics, ...carry])].sort());
+      if (topicsOut !== JSON.stringify(prevTopics.slice().sort())) await env.EWS_KV.put("activetopics", topicsOut);
+    } catch {}
+  }
   return summary;
 }

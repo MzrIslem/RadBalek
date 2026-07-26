@@ -26,15 +26,20 @@ export function makeWilayaResolver(geojson) {
       }
     return { props: f.properties, rings, bbox: [minLon, minLat, maxLon, maxLat] };
   });
-  return function resolve(lat, lon) {
+  // maxDeg: radius of the nearest-bbox-centre fallback. The 0.5° default is
+  // right for land points, but Algeria's damaging earthquakes originate on the
+  // OFFSHORE margin, where every epicentre fell outside it and resolved to null
+  // — and pipeline.js requires a wilaya before it will raise a quake red alert,
+  // so those quakes were silently dropped from the push path entirely.
+  return function resolve(lat, lon, maxDeg = 0.5) {
     for (const f of features) {
       const [w, s, e, n] = f.bbox;
       if (lon < w || lon > e || lat < s || lat > n) continue;
       for (const poly of f.rings) if (pointInRing(lon, lat, poly[0])) return f.props;
     }
-    // fallback: nearest bbox center among candidates within ~0.5 deg
+    // fallback: nearest bbox center among candidates within maxDeg
     let best = null;
-    let bestD = 0.5 * 0.5;
+    let bestD = maxDeg * maxDeg;
     for (const f of features) {
       const cx = (f.bbox[0] + f.bbox[2]) / 2;
       const cy = (f.bbox[1] + f.bbox[3]) / 2;

@@ -78,6 +78,12 @@ export function parseFirmsCsv(csv, sourceName) {
 export function significantHotspots(hotspots) {
   return hotspots.filter((h) => {
     if (h.confidence === "l") return false;
+    // A MISSING confidence must mean "unknown", never "zero": Number(null) and
+    // Number("") are both 0, which is < 30, so a renamed or blank NASA column
+    // silently discarded 100% of hotspots — and because hotspots still parsed,
+    // firmsSkipped stayed false and worker.js overwrote the last-good cache
+    // with the empty result, destroying the fallback built for exactly this.
+    if (h.confidence == null || h.confidence === "") return true;
     const n = Number(h.confidence);
     if (Number.isFinite(n) && n < 30) return false;
     return true;

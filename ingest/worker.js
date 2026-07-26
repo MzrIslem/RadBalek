@@ -122,7 +122,7 @@ export default {
     if (path === "/admin")
       return new Response(ADMIN_HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
     if (path === "/v1/admin/reports") return handleAdminList(req, url, env);
-    if (path === "/v1/admin/moderate" && req.method === "POST") return handleModerate(req, env);
+    if (path === "/v1/admin/moderate" && req.method === "POST") return handleModerate(req, url, env);
     if (path === "/v1/admin/overview") return handleAdminOverview(req, url, env);
     if (path === "/v1/admin/app-latest" && req.method === "POST") return handleAdminAppLatest(req, url, env);
     // Force an immediate pipeline collect (no push — pushes stay cron-only so
@@ -283,26 +283,15 @@ async function refresh(env, doPush = false) {
   } catch {}
   if (!doPush) return snap;
 
-  // Hourly stats snapshot (newest-first key) — the analyzable time series.
   const now = new Date(snap.generatedAt);
-  if (now.getUTCMinutes() < 10) {
-    const inv = String(10_000_000_000_000 - now.getTime()).padStart(14, "0");
-    const entry = { at: snap.generatedAt, stats: snap.stats, reds: snap.alerts.filter((a) => a.color === "red").map((a) => ({ hazard: a.hazard, wilayas: a.wilayas.map((w) => w.code) })) };
-    try {
-      await env.EWS_KV.put(`s:${inv}`, JSON.stringify(entry), { expirationTtl: 60 * 60 * 24 * 365 });
-    } catch {}
-    // Rolled-up 7-day doc so /v1/history.json costs 1 get, not list+168 gets.
-    try {
-      const doc = JSON.parse((await env.EWS_KV.get("history:doc")) || "[]");
-      if (!doc.length || doc[0].at !== entry.at) doc.unshift(entry);
-      await env.EWS_KV.put("history:doc", JSON.stringify(doc.slice(0, 168)), { expirationTtl: 60 * 60 * 24 * 30 });
-    } catch {}
-  }
-  // Push new orange/red alerts to FCM topics (no-op until FIREBASE_SA secret exists).
+  // PUSH FIRST. The hourly analytics block used to run here, with two unguarded
+  // statements — and anything that throws before sendPush() silences the whole
+  // cycle (the shape of the 2026-07-19 outage). Nothing cosmetic goes above the
+  // delivery path; the history write now happens after it, below.
   // KV write budget (1k/day free): only persist the status when something
   // happened, plus an hourly heartbeat so /v1/push-status.json stays fresh.
   try {
-    const pushSummary = await sendPush(env, snap.notifications, snap.alerts);
+    const pushSummary = await sendPush(env, snap.notifications, snap.alerts, snap.errors, snap.stats.onmEntries);
     const eventful = pushSummary.sent || pushSummary.heartbeats || pushSummary.allclear || (pushSummary.errors || []).length;
     if (eventful || now.getUTCMinutes() < 10) {
       try {
@@ -316,5 +305,25 @@ async function refresh(env, doPush = false) {
     } catch {}
     await watchPipeline(env, snap, { fatal: String(err.message) });
   }
+
+  // Hourly stats snapshot (newest-first key) — the analyzable time series.
+  // Deliberately AFTER the push block: this is analytics, and it must never be
+  // able to throw its way in front of alert delivery. `now` comes from
+  // snap.generatedAt, not wall-clock, so the hourly gate is unchanged.
+  try {
+    if (now.getUTCMinutes() < 10) {
+      const inv = String(10_000_000_000_000 - now.getTime()).padStart(14, "0");
+      const entry = { at: snap.generatedAt, stats: snap.stats, reds: snap.alerts.filter((a) => a.color === "red").map((a) => ({ hazard: a.hazard, wilayas: a.wilayas.map((w) => w.code) })) };
+      try {
+        await env.EWS_KV.put(`s:${inv}`, JSON.stringify(entry), { expirationTtl: 60 * 60 * 24 * 365 });
+      } catch {}
+      // Rolled-up 7-day doc so /v1/history.json costs 1 get, not list+168 gets.
+      try {
+        const doc = JSON.parse((await env.EWS_KV.get("history:doc")) || "[]");
+        if (!doc.length || doc[0].at !== entry.at) doc.unshift(entry);
+        await env.EWS_KV.put("history:doc", JSON.stringify(doc.slice(0, 168)), { expirationTtl: 60 * 60 * 24 * 30 });
+      } catch {}
+    }
+  } catch {}
   return snap;
 }

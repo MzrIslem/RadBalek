@@ -56,17 +56,19 @@ export async function handleAdminList(request, url, env) {
   return json({ count: out.length, reports: out });
 }
 
-export async function handleModerate(request, env) {
+export async function handleModerate(request, url, env) {
+  // Routed through adminAuthed like every other admin endpoint: this used to
+  // re-implement the key check inline, with NO failed-attempt lockout — giving
+  // unlimited unthrottled guesses at ADMIN_KEY, and on success the ability to
+  // mark genuine hazard reports "rejected" (hidden from the public feed).
+  // adminAuthed reads Authorization: Bearer first and falls back to ?key=.
+  if (!(await adminAuthed(request, url, env))) return json({ error: "forbidden" }, 403);
   let b;
   try {
     b = await request.json();
   } catch {
     return json({ error: "invalid json" }, 400);
   }
-  // Bearer header preferred; body key kept one release for compatibility.
-  const hdr = (request.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i);
-  const key = hdr ? hdr[1] : b.key;
-  if (!env.ADMIN_KEY || key !== env.ADMIN_KEY) return json({ error: "forbidden" }, 403);
   if (!["verified", "rejected"].includes(b.status)) return json({ error: "bad status" }, 400);
   const raw = await env.EWS_KV.get(String(b.id || ""));
   if (!raw) return json({ error: "not found" }, 404);

@@ -82,7 +82,12 @@ export async function handleWeather(env, geo) {
     }),
   };
   const body = JSON.stringify(out);
-  await env.EWS_KV.put("weather", body, { expirationTtl: 1800 });
+  // Guarded: an unguarded put threw on a quota 429 and made /v1/weather.json
+  // return 500 for the rest of the day — killing the heat-risk layer during
+  // exactly the heat emergency that consumed the quota.
+  try {
+    await env.EWS_KV.put("weather", body, { expirationTtl: 1800 });
+  } catch {}
   return new Response(body, {
     headers: { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*", "cache-control": "public, max-age=300" },
   });
