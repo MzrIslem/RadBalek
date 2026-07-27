@@ -118,7 +118,7 @@ Widget alertCard(BuildContext context, AppState st, AlertItem a, {bool mine = fa
             Text('${S.t(lang, a.hazard)} — ${S.t(lang, a.color)}',
                 style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800, color: v.onContainer, height: 1.15)),
             const SizedBox(height: 4),
-            Text('${wLabel(st, a.wilayas)} · ${hhmm(a.onset)} → ${hhmm(a.expires)}',
+            Text('${wLabel(st, a.wilayas)} · ${span(a.onset, a.expires)}',
                 maxLines: 1, overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 12.5, color: v.onContainer.withValues(alpha: .85))),
           ]),

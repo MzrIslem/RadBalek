@@ -248,7 +248,9 @@ class HomeScreen extends StatelessWidget {
           FilledButton(
             onPressed: () => goTo(2),
             style: FilledButton.styleFrom(
-                backgroundColor: v.solid, foregroundColor: Colors.white,
+                // solid is pale in dark mode — white on it is unreadable.
+                backgroundColor: st.dark ? v.onContainer : v.solid,
+                foregroundColor: st.dark ? v.container : Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 14), visualDensity: VisualDensity.compact),
             child: Text(S.t(lang, 'rel_check'),
                 style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
@@ -350,7 +352,12 @@ class HomeScreen extends StatelessWidget {
     final lang = st.lang;
     final safe = mineTop == null;
     final v = vigilance(safe ? 'green' : mineTop.color, st.dark); // card colour = MY state
-    final where = st.myWilayas.map(st.wilayaName).take(3).join(' · ');
+    // Name the wilaya(s) the alert ACTUALLY covers, not every wilaya the user
+    // follows — three names under "Vigilance orange" read as three wilayas
+    // under orange, and a traveller's GPS wilaya never got named at all.
+    final where = safe
+        ? st.myWilayas.map(st.wilayaName).take(3).join(' · ')
+        : wLabel(st, mineTop.wilayas);
     // National context: how many wilayas sit at the worst active level.
     final reds = snap.wilayasWith('red').length;
     final oranges = snap.wilayasWith('orange').length;
@@ -359,7 +366,7 @@ class HomeScreen extends StatelessWidget {
     final natN = nat == 'red' ? reds : nat == 'orange' ? oranges : yellows;
     final natHead = nat == 'green'
         ? S.t(lang, 'no_alert')
-        : '$natN ${S.t(lang, 'wilayas_$nat')}${safe ? '' : ' · ${S.t(lang, 'until')} ${hhmm(mineTop.expires)}'}';
+        : '$natN ${S.t(lang, 'wilayas_$nat')}${safe ? '' : ' · ${S.t(lang, 'until')} ${untilStamp(mineTop.expires)}'}';
     final natLine = '$natHead · ${S.t(lang, st.sourceStatus)} ${hhmm(snap.generatedAt)}';
     return AnimatedContainer(
       duration: const Duration(milliseconds: 350),
@@ -489,12 +496,18 @@ class HomeScreen extends StatelessWidget {
   Widget _redMode(BuildContext context, AppState st, AlertItem a) {
     final lang = st.lang;
     final v = vigilance('red', st.dark);
+    // In dark mode `solid` is a PALE salmon (#FFB4AB): using it as a background
+    // under white text gave 1.7:1 contrast (WCAG AA needs 4.5:1) on the one
+    // screen someone reads at 3am. Use the container/onContainer pair in dark,
+    // keep the existing solid/white in light (that pair is already fine).
+    final cardBg = st.dark ? v.container : v.solid;
+    final onCard = st.dark ? v.onContainer : Colors.white;
     Widget big(IconData icon, String label, VoidCallback onTap, {Color? bg, Color? fg}) => Padding(
           padding: const EdgeInsets.only(top: 10),
           child: FilledButton.icon(
             style: FilledButton.styleFrom(
-              backgroundColor: bg ?? Colors.white,
-              foregroundColor: fg ?? v.solid,
+              backgroundColor: bg ?? onCard,
+              foregroundColor: fg ?? cardBg,
               minimumSize: const Size.fromHeight(54),
               textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
@@ -506,26 +519,26 @@ class HomeScreen extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: v.solid, borderRadius: BorderRadius.circular(28)),
+      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(28)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 30),
+          Icon(Icons.warning_amber_rounded, color: onCard, size: 30),
           const SizedBox(width: 10),
           Expanded(
             child: Text('${S.t(lang, 'red')} — ${S.t(lang, a.hazard)}',
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white, height: 1.15)),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: onCard, height: 1.15)),
           ),
           // Speak/stop the alert aloud (AR+FR) — for anyone who can't read it.
           IconButton(
             tooltip: S.t(lang, 'listen'),
             onPressed: () => VoiceAlert.toggle(a,
                 myCodes: {...st.myWilayas, if (st.hereWilaya != null) st.hereWilaya!}, lang: st.lang),
-            icon: const Icon(Icons.campaign_outlined, color: Colors.white, size: 28),
+            icon: Icon(Icons.campaign_outlined, color: onCard, size: 28),
           ),
         ]),
         const SizedBox(height: 4),
-        Text('${wLabel(st, a.wilayas)} · ${hhmm(a.onset)} → ${hhmm(a.expires)}',
-            style: const TextStyle(fontSize: 13, color: Colors.white70)),
+        Text('${wLabel(st, a.wilayas)} · ${span(a.onset, a.expires)}',
+            style: TextStyle(fontSize: 13, color: onCard.withValues(alpha: .85))),
         big(Icons.checklist_rounded, S.t(lang, 'directives'), () => showAlertSheet(context, st, a)),
         big(Icons.call, '${S.t(lang, 'em_pc')} · ${st.sosNumbers.first}',
             () => st.directCall(st.sosNumbers.first)),
@@ -580,8 +593,11 @@ class HomeScreen extends StatelessWidget {
         );
 
     final nums = st.sosNumbers.take(3).toList();
-    final safeBg = safeProminent ? g.solid : g.container;
-    final safeFg = safeProminent ? Colors.white : g.onContainer;
+    // safeProminent is true exactly when an alert is live in the user's
+    // wilayas, so this cell must stay readable then above all. In dark mode
+    // g.solid is a pale green and white on it measures ~1.7:1.
+    final safeBg = safeProminent ? (st.dark ? g.onContainer : g.solid) : g.container;
+    final safeFg = safeProminent ? (st.dark ? g.container : Colors.white) : g.onContainer;
     return Row(children: [
       for (final n in nums) ...[
         // Personal contacts show their name and dial DIRECTLY (CALL_PHONE);

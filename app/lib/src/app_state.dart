@@ -411,6 +411,11 @@ class AppState extends ChangeNotifier {
 
   void toggleWilaya(int code) {
     if (myWilayas.contains(code)) {
+      // Never allow zero wilayas: the topic set would empty out (unsubscribing
+      // from EVERYTHING) while the home screen showed a permanent green "Tout
+      // va bien chez vous" — even during a national red alert. The SOS editor
+      // guards its last entry the same way.
+      if (myWilayas.length <= 1) return;
       myWilayas = myWilayas.where((c) => c != code).toList();
     } else {
       myWilayas = [...myWilayas, code];

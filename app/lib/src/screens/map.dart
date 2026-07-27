@@ -928,7 +928,7 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
               subtitle: Text(
-                '${hhmm(a.onset)} → ${hhmm(a.expires)}',
+                span(a.onset, a.expires),
                 style: const TextStyle(fontSize: 12),
               ),
             ),

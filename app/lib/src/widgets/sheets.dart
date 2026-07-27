@@ -16,6 +16,35 @@ String hhmm(String? iso) {
   return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 }
 
+/// Validity window with DATES when the range crosses a day boundary.
+/// 43 of 83 live alerts span midnight — "19:00 → 19:00" read as a zero-length
+/// (or already-over) window when it actually meant "until 19:00 TOMORROW".
+/// The \u2066...\u2069 LTR isolate keeps "19:00 -> 20:00" from reordering into
+/// "20:00 -> 19:00" inside Arabic (RTL) text — the arrow is bidi-neutral and
+/// gets resolved right-to-left between two number runs.
+String span(String? a, String? b) {
+  final x = DateTime.tryParse(a ?? '')?.toLocal();
+  final y = DateTime.tryParse(b ?? '')?.toLocal();
+  final sameDay = x != null && y != null && x.day == y.day && x.month == y.month;
+  String dm(DateTime? d) =>
+      d == null ? '' : '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')} ';
+  final left = '${sameDay ? '' : dm(x)}${hhmm(a)}';
+  final right = '${sameDay ? '' : dm(y)}${hhmm(b)}';
+  return '\u2066$left → $right\u2069';
+}
+
+/// Single deadline, dated only when it is NOT today. "valable jusqu'à 19:00"
+/// on a 24h alert made people think it ended that evening — it ran to 19:00
+/// tomorrow.
+String untilStamp(String? iso) {
+  final d = DateTime.tryParse(iso ?? '')?.toLocal();
+  if (d == null) return '';
+  final now = DateTime.now();
+  final today = d.day == now.day && d.month == now.month && d.year == now.year;
+  final dm = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')} ';
+  return '\u2066${today ? '' : dm}${hhmm(iso)}\u2069';
+}
+
 /// Full timestamp + relative age: "21/07 · 14:30 · il y a 2 h" (localized).
 /// Used where provenance matters (press / official field posts).
 String stampAgo(String? iso, String lang) {
@@ -86,7 +115,7 @@ void showAlertSheet(BuildContext context, AppState st, AlertItem a) {
               _row5(ctx, Icons.info_outline, S.t(lang, 'what'), Text(S.impact(lang, a.hazard))),
               _row5(ctx, Icons.place_outlined, S.t(lang, 'where'), Text(wLabel(st, a.wilayas))),
               _row5(ctx, Icons.schedule, S.t(lang, 'when'),
-                  Text('${S.t(lang, 'today')} ${hhmm(a.onset)} → ${hhmm(a.expires)}')),
+                  Text(span(a.onset, a.expires))),
               if (a.wilayas.isNotEmpty && st.weather[a.wilayas.first.code] != null)
                 Builder(builder: (_) {
                   final w = st.weather[a.wilayas.first.code]!;
@@ -125,7 +154,7 @@ void showAlertSheet(BuildContext context, AppState st, AlertItem a) {
                     final acts = S.actions(lang, a.hazard).map((x) => '• $x').join('\n');
                     SharePlus.instance.share(ShareParams(
                         text:
-                            '⚠️ ${a.headline['fr'] ?? ''}\n${a.headline['ar'] ?? ''}\n🕐 ${hhmm(a.onset)} → ${hhmm(a.expires)}\n$acts\n— Rad Balek رد بالك'));
+                            '⚠️ ${a.headline['fr'] ?? ''}\n${a.headline['ar'] ?? ''}\n🕐 ${span(a.onset, a.expires)}\n$acts\n— Rad Balek رد بالك'));
                   },
                   icon: const Icon(Icons.share_outlined),
                   label: Text(S.t(lang, 'share')),
