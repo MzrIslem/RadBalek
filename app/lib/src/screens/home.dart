@@ -147,6 +147,14 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(height: 12),
           // 2 — Emergency hotkeys + "I'm safe".
           _sos(context, st, safeProminent: alertActive),
+          // 2b — Fire danger (Météo-des-Forêts style): FWI on the EFFIS scale,
+          // today + 2 days ahead. Only shown when it has something to say —
+          // burnable zone AND at least "high" in the 3-day window. Desert
+          // wilayas never show it (FWI saturates there with nothing to burn).
+          ...(() {
+            final card = _fireDanger(context, st);
+            return card == null ? const <Widget>[] : [const SizedBox(height: 12), card];
+          })(),
           const SizedBox(height: 22),
           // 3 — Big tile access buttons.
           _launcherLabel(context, S.t(lang, 'quick_access')),
@@ -488,6 +496,85 @@ class HomeScreen extends StatelessWidget {
             }),
           ]);
         }),
+      ]),
+    );
+  }
+
+  /// Fire-danger outlook for MY wilaya — the Canadian FWI on the published
+  /// EFFIS class scale, today / J+1 / J+2 (the Météo-des-Forêts framing).
+  /// Returns null when there is nothing worth saying: desert fuel zone, no
+  /// data, or the whole window below "high" (green noise erodes trust).
+  Widget? _fireDanger(BuildContext context, AppState st) {
+    final lang = st.lang;
+    final code = st.hereWilaya ?? (st.myWilayas.isNotEmpty ? st.myWilayas.first : null);
+    if (code == null) return null;
+    final fire = st.weather[code]?['fire'] as Map?;
+    if (fire == null || fire['fuel'] == 'desert') return null;
+    final days = [
+      (S.t(lang, 'today'), fire['fwi'], fire['class']),
+      (S.t(lang, 'fwi_d1'), (fire['d1'] as Map?)?['fwi'], (fire['d1'] as Map?)?['class']),
+      (S.t(lang, 'fwi_d2'), (fire['d2'] as Map?)?['fwi'], (fire['d2'] as Map?)?['class']),
+    ];
+    const rank = ['low', 'moderate', 'high', 'veryHigh', 'extreme', 'veryExtreme'];
+    int worst = -1;
+    for (final d in days) {
+      final i = rank.indexOf((d.$3 as String?) ?? '');
+      if (i > worst) worst = i;
+    }
+    if (worst < 2) return null; // low/moderate everywhere — say nothing
+    // EFFIS class → the app's vigilance palette (label carries the nuance).
+    Color bg(String? c) => switch (c) {
+          'veryHigh' || 'extreme' || 'veryExtreme' => vigilance('red', st.dark).container,
+          'high' => vigilance('orange', st.dark).container,
+          'moderate' => vigilance('yellow', st.dark).container,
+          _ => vigilance('green', st.dark).container,
+        };
+    Color fg(String? c) => switch (c) {
+          'veryHigh' || 'extreme' || 'veryExtreme' => vigilance('red', st.dark).onContainer,
+          'high' => vigilance('orange', st.dark).onContainer,
+          'moderate' => vigilance('yellow', st.dark).onContainer,
+          _ => vigilance('green', st.dark).onContainer,
+        };
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(20)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Text('🔥', style: TextStyle(fontSize: 18)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text('${S.t(lang, 'fwi_title')} — ${st.wilayaName(code)}',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        Row(children: [
+          for (final (label, fwi, cls) in days) ...[
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                decoration: BoxDecoration(color: bg(cls as String?), borderRadius: BorderRadius.circular(12)),
+                child: Column(children: [
+                  Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 10.5, color: fg(cls).withValues(alpha: .85))),
+                  const SizedBox(height: 2),
+                  Text(cls == null ? '—' : S.t(lang, 'fwi_$cls'),
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: fg(cls))),
+                  if (fwi != null)
+                    Text('FWI ${(fwi as num).round()}',
+                        style: TextStyle(fontSize: 10, color: fg(cls).withValues(alpha: .8))),
+                ]),
+              ),
+            ),
+            if (label != days.last.$1) const SizedBox(width: 8),
+          ],
+        ]),
+        const SizedBox(height: 8),
+        Text(S.t(lang, 'fwi_scale'),
+            style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
       ]),
     );
   }

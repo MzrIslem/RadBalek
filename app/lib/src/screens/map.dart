@@ -38,7 +38,10 @@ class _WilayaShape {
 
 class _MapScreenState extends State<MapScreen> {
   int? _selected;
-  String _layer = 'vig'; // vig | fire | quake | t | w | h | fwi
+  String _layer = 'vig'; // vig | fire | quake | t | w | h | fwi | burnt
+  // FRP filter for the fire layer: keep only clusters whose total Fire
+  // Radiative Power says "real blaze", not a warm pixel.
+  bool _frpStrong = false;
   double _zoom = 4.6;
   List<_WilayaShape>? _shapes;
   Object? _shapesFrom;
@@ -250,7 +253,7 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     final sceneKey =
-        '${identityHashCode(geo)}:${identityHashCode(snap)}:${identityHashCode(st.weather)}:$_layer:${st.dark}:$_selected:$lang';
+        '${identityHashCode(geo)}:${identityHashCode(snap)}:${identityHashCode(st.weather)}:$_layer:${st.dark}:$_selected:$lang:$_frpStrong';
     if (sceneKey != _sceneKey) {
       _sceneKey = sceneKey;
 
@@ -283,7 +286,10 @@ class _MapScreenState extends State<MapScreen> {
                 !i.possibleIndustrial &&
                 i.wilayas.isNotEmpty &&
                 i.lat != null &&
-                i.lon != null)
+                i.lon != null &&
+                // "Feux intenses": total FRP >= 50 MW — the incendieencours.fr
+                // pattern for separating real blazes from warm pixels.
+                (!_frpStrong || _layer != 'fire' || (i.totalFrp ?? 0) >= 50))
               CircleMarker(
                 point: LatLng(i.lat!, i.lon!),
                 radius: (3 + i.detections * .3).clamp(3, 10).toDouble(),
@@ -467,7 +473,7 @@ class _MapScreenState extends State<MapScreen> {
                 subdomains: const ['a', 'b', 'c', 'd'],
                 userAgentPackageName: 'dz.radbalek.rad_balek',
               ),
-              if (_layer == 'fwi')
+              if (_layer == 'fwi' || _layer == 'burnt')
                 OverlayImageLayer(
                   overlayImages: [
                     OverlayImage(
@@ -475,9 +481,11 @@ class _MapScreenState extends State<MapScreen> {
                         const LatLng(18.9, -8.7),
                         const LatLng(37.3, 12.0),
                       ),
-                      opacity: .62,
-                      imageProvider: const NetworkImage(
-                        '${Api.base}/v1/fwi.png',
+                      // Burnt scars are sparse dark patches — keep them opaque
+                      // enough to spot; the FWI raster is a full-cover wash.
+                      opacity: _layer == 'burnt' ? .8 : .62,
+                      imageProvider: NetworkImage(
+                        '${Api.base}/v1/${_layer == 'burnt' ? 'burnt' : 'fwi'}.png',
                       ),
                     ),
                   ],
@@ -543,6 +551,21 @@ class _MapScreenState extends State<MapScreen> {
             selected: _layer == 'fwi',
             onSelected: (_) => setState(() => _layer = 'fwi'),
           ),
+          // EFFIS burnt-areas raster: what already burned this season.
+          ChoiceChip(
+            label: Text('🩹 ${S.t(lang, 'burnt')}', style: const TextStyle(fontSize: 12)),
+            selected: _layer == 'burnt',
+            onSelected: (_) => setState(() => _layer = 'burnt'),
+          ),
+          // FRP filter (incendieencours.fr-style): only strong fires. Shown
+          // only while the fire layer is active; filters the satellite dots by
+          // total Fire Radiative Power.
+          if (_layer == 'fire')
+            FilterChip(
+              label: Text('⚡ ${S.t(lang, 'frp_strong')}', style: const TextStyle(fontSize: 12)),
+              selected: _frpStrong,
+              onSelected: (v) => setState(() => _frpStrong = v),
+            ),
         ],
       ),
     );
