@@ -1,6 +1,13 @@
 // Per-wilaya current weather via Open-Meteo (free, no key), batched in one
 // request over wilaya centroids, cached 30 min in KV. Serves /v1/weather.json
 // for the app's map layers: temperature, wind speed, humidity, feels-like.
+import { fwiSeries } from "./fwi.js";
+
+// FFMC/DMC/DC are cumulative, so the index needs a run-up before it means
+// anything. 14 days from the standard startup values is enough for FFMC and
+// DMC to converge; DC drifts longer but its influence is damped by BUI.
+const FWI_SPINUP_DAYS = 14;
+
 export async function handleWeather(env, geo) {
   const cached = await env.EWS_KV.get("weather");
   if (cached)
@@ -28,7 +35,10 @@ export async function handleWeather(env, geo) {
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}` +
     `&current=temperature_2m,relative_humidity_2m,wind_speed_10m,apparent_temperature` +
-    `&daily=apparent_temperature_max&forecast_days=3&timezone=UTC`;
+    // The extra daily fields are the CFFWIS inputs (peak-fire-weather proxies);
+    // past_days warms up the cumulative fuel-moisture codes.
+    `&daily=apparent_temperature_max,temperature_2m_max,relative_humidity_2m_min,wind_speed_10m_max,precipitation_sum` +
+    `&past_days=${FWI_SPINUP_DAYS}&forecast_days=3&timezone=UTC`;
   const aqUrl =
     `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lats}&longitude=${lons}` +
     `&current=european_aqi,pm2_5,pm10&timezone=UTC`;
@@ -61,11 +71,42 @@ export async function handleWeather(env, geo) {
     source: "Open-Meteo.com",
     wilayas: cents.map((c, i) => {
       const cur = arr[i]?.current || {};
-      const dmax = arr[i]?.daily?.apparent_temperature_max || [];
-      const today = dmax[0] ?? null;
-      const next48 = dmax.length > 2 ? Math.max(dmax[1], dmax[2]) : (dmax[1] ?? today);
+      const daily = arr[i]?.daily || {};
+      const dmax = daily.apparent_temperature_max || [];
+      // past_days shifts the arrays: index FWI_SPINUP_DAYS is TODAY, and the
+      // two entries after it are J+1 / J+2. Everything before is spin-up only.
+      const P = FWI_SPINUP_DAYS;
+      const today = dmax[P] ?? null;
+      const d1 = dmax[P + 1] ?? null;
+      const d2 = dmax[P + 2] ?? null;
+      const next48 = d1 != null && d2 != null ? Math.max(d1, d2) : (d1 ?? today);
       let trend = "flat";
       if (today != null && next48 != null) trend = next48 > today + 2 ? "up" : next48 < today - 2 ? "down" : "flat";
+      // Fire danger: run the cumulative CFFWIS codes across the spin-up window
+      // and keep today + the two forecast days (the Météo-des-Forêts framing).
+      let fire = null;
+      try {
+        const times = daily.time || [];
+        const series = times.map((d, j) => ({
+          t: daily.temperature_2m_max?.[j],
+          h: daily.relative_humidity_2m_min?.[j],
+          w: daily.wind_speed_10m_max?.[j],
+          p: daily.precipitation_sum?.[j],
+          month: Number(String(d).slice(5, 7)) || 1,
+        }));
+        if (series.length > P) {
+          const r = fwiSeries(series, P); // [today, J+1, J+2]
+          // FWI measures fire WEATHER, not fire risk: it knows nothing about
+          // fuel. In the Sahara it saturates (45°C, no rain for months) and
+          // would paint half the country "très extrême" with nothing to burn —
+          // crying wolf, and EFFIS masks non-fuel areas for the same reason.
+          // Crude but honest proxy: Algeria's burnable land (Tell forests, then
+          // alfa steppe) is northern. The app uses this to decide whether the
+          // fire-danger reading is worth surfacing at all.
+          const fuel = c.lat >= 34.5 ? "forest" : c.lat >= 32.5 ? "steppe" : "desert";
+          if (r[0]) fire = { fwi: r[0].fwi, class: r[0].class, d1: r[1] ?? null, d2: r[2] ?? null, fuel };
+        }
+      } catch {} // fire danger is enrichment — never fail weather over it
       return {
         code: c.code,
         t: cur.temperature_2m ?? null,
@@ -73,6 +114,7 @@ export async function handleWeather(env, geo) {
         rh: cur.relative_humidity_2m ?? null,
         wind: cur.wind_speed_10m ?? null,
         f: { today, peak48: next48, trend, risk: riskOf(Math.max(today ?? -99, next48 ?? -99)) },
+        fire,
         aq: (() => {
           const c = aqArr[i]?.current;
           if (!c) return null;

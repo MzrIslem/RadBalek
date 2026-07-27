@@ -56,10 +56,10 @@ export default {
       "/v1/reports.csv": 300, // 1 list + up to 1000 gets — must be cached
       "/v1/history.json": 300, // kills the 168-get burst per history open
       "/v1/weather.json": 600,
-      // NOTE: /v1/fwi.png is intentionally NOT edge-cached. MapServer returns
-      // errors as 200 + HTML, and an edge-cached error page can't be purged on
-      // workers.dev — it froze the fire-risk layer for a day. Its handler
-      // validates the PNG and serves from KV (refreshed daily) instead.
+      // NOTE: /v1/fwi.png and /v1/burnt.png are intentionally NOT edge-cached.
+      // MapServer returns errors as 200 + HTML, and an edge-cached error page
+      // can't be purged on workers.dev — it froze the fire-risk layer for a
+      // day. Their handler validates the PNG and serves from KV (daily) instead.
       "/v1/app.json": 900,
     };
     const cacheable = req.method === "GET" && CACHE_TTL[path];
@@ -147,10 +147,15 @@ export default {
       }
     }
     if (path === "/v1/test-push" && req.method === "POST") return handleTestPush(req, env, ctx);
-    // EFFIS Fire Weather Index forecast raster over Algeria, cached per day.
-    // TIME is mandatory — without it EFFIS silently returns a blank tile.
-    if (path === "/v1/fwi.png") {
+    // EFFIS rasters over Algeria, cached per day.
+    //   /v1/fwi.png   Fire Weather Index forecast (danger)
+    //   /v1/burnt.png burnt areas this season (what already went up)
+    // TIME is mandatory on the FWI layer — without it EFFIS returns a blank tile.
+    if (path === "/v1/fwi.png" || path === "/v1/burnt.png") {
       const day = new Date().toISOString().slice(0, 10);
+      const burnt = path === "/v1/burnt.png";
+      const kvKey = burnt ? `burnt:${day}` : `fwi:${day}`;
+      const layer = burnt ? "modis.ba" : "mf010.fwi";
       // MapServer/EFFIS signals failure with HTTP 200 + an HTML body. Guard on
       // the PNG magic bytes so an error page is never cached or served as an
       // "image". Validating the KV read as well lets a previously poisoned
@@ -160,10 +165,12 @@ export default {
         const b = new Uint8Array(buf, 0, 8);
         return b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
       };
-      let img = await env.EWS_KV.get(`fwi:${day}`, "arrayBuffer");
+      let img = await env.EWS_KV.get(kvKey, "arrayBuffer");
       if (!isPng(img)) {
         const r = await fetch(
-          `https://maps.effis.emergency.copernicus.eu/effis?service=WMS&version=1.1.1&request=GetMap&layers=mf010.fwi&styles=default&time=${day}&srs=EPSG:4326&bbox=-8.7,18.9,12.0,37.3&width=1024&height=910&format=image/png&transparent=true`,
+          `https://maps.effis.emergency.copernicus.eu/effis?service=WMS&version=1.1.1&request=GetMap` +
+            `&layers=${layer}&styles=default${burnt ? "" : `&time=${day}`}` +
+            `&srs=EPSG:4326&bbox=-8.7,18.9,12.0,37.3&width=1024&height=910&format=image/png&transparent=true`,
           { headers: { "user-agent": "radbalek/0.2 (+ews Algeria)", accept: "image/png,*/*" } }
         );
         if (!r.ok) return new Response("effis " + r.status, { status: 502, headers: corsHeaders() });
@@ -171,7 +178,7 @@ export default {
         if (!isPng(buf)) return new Response("effis: non-image response", { status: 502, headers: corsHeaders() });
         img = buf;
         try {
-          await env.EWS_KV.put(`fwi:${day}`, img, { expirationTtl: 86400 });
+          await env.EWS_KV.put(kvKey, img, { expirationTtl: 86400 });
         } catch {}
       }
       return new Response(img, {
