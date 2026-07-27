@@ -46,6 +46,16 @@ class AppState extends ChangeNotifier {
   int? hereWilaya;
   List<String> family = []; // SMS recipients for the I'm-safe button
   List<String> sosNumbers = ['14', '17', '1055']; // customizable SOS row
+  // Larger text throughout — this app is meant for elderly and low-literacy
+  // users too, and the OS-level setting is one many of them never find.
+  bool bigText = false;
+
+  void toggleBigText() {
+    bigText = !bigText;
+    SharedPreferences.getInstance().then((p) => p.setBool('rb_bigtext', bigText));
+    notifyListeners();
+  }
+
   bool voiceAlerts = true; // spoken red-alert announcements (AR+FR)
   // Auto-announce is now native (AlertActivity fires it WITH the siren, even on
   // a locked screen). Dart VoiceAlert stays only for the in-app replay button
@@ -173,6 +183,7 @@ class AppState extends ChangeNotifier {
     family = p.getStringList('rb_family') ?? [];
     sosNumbers = p.getStringList('rb_sos') ?? ['14', '17', '1055'];
     voiceAlerts = p.getBool('rb_voice') ?? true;
+    bigText = p.getBool('rb_bigtext') ?? false;
     contactNames = {
       for (final e in p.getStringList('rb_names') ?? const <String>[])
         if (e.contains('|')) e.substring(0, e.indexOf('|')): e.substring(e.indexOf('|') + 1),

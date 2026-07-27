@@ -83,6 +83,17 @@ class SettingsScreen extends StatelessWidget {
                   value: st.followMe,
                   onChanged: (_) => st.toggleFollow(),
                 ),
+                divider,
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                  secondary: Icon(Icons.format_size, size: 20, color: cs.primary),
+                  title: Text(S.t(lang, 'big_text'), style: const TextStyle(fontSize: 13.5)),
+                  subtitle: Text(S.t(lang, 'big_text_sub'),
+                      style: TextStyle(fontSize: 10.5, color: cs.onSurfaceVariant)),
+                  value: st.bigText,
+                  onChanged: (_) => st.toggleBigText(),
+                ),
               ])),
               // --- Alertes ---
               section(S.t(lang, 'nav_alerts'), vigilance('orange', st.dark).solid, Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

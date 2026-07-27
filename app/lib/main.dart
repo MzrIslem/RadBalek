@@ -40,10 +40,22 @@ class RadBalekApp extends StatelessWidget {
           theme: RBTheme.light(),
           darkTheme: RBTheme.dark(),
           themeMode: st.dark ? ThemeMode.dark : ThemeMode.light,
-          builder: (ctx, child) => Directionality(
-            textDirection: st.rtl ? ui.TextDirection.rtl : ui.TextDirection.ltr,
-            child: child ?? const SizedBox.shrink(),
-          ),
+          builder: (ctx, child) {
+            // "Texte grand": scales on top of the OS setting rather than
+            // replacing it, so a user who already enlarged system text keeps
+            // that and gets more. Clamped at 1.6 — beyond that the emergency
+            // cells and the red takeover start clipping.
+            final osScale = MediaQuery.textScalerOf(ctx).scale(14) / 14;
+            final scale = (osScale * (st.bigText ? 1.3 : 1.0)).clamp(0.85, 1.6);
+            return MediaQuery.withClampedTextScaling(
+              minScaleFactor: scale,
+              maxScaleFactor: scale,
+              child: Directionality(
+                textDirection: st.rtl ? ui.TextDirection.rtl : ui.TextDirection.ltr,
+                child: child ?? const SizedBox.shrink(),
+              ),
+            );
+          },
           home: const Shell(),
         ),
       ),
