@@ -111,10 +111,17 @@ class _ReliabilityCardState extends State<ReliabilityCard> with WidgetsBindingOb
         fsiOk &&
         vol >= 0.3;
 
-    Widget row(String label, bool ok, IconData icon, Future<void> Function() fix) => Padding(
+    final amber = vigilance('orange', st.dark).solid;
+    // `advisory` rows do NOT block the "everything is ready" verdict (the siren
+    // rides the alarm stream, which ignores DND and silent mode). Showing them
+    // in red next to "Tout est prêt" contradicted the verdict on the one screen
+    // whose whole job is to be trusted — so they warn in amber instead.
+    Widget row(String label, bool ok, IconData icon, Future<void> Function() fix,
+            {bool advisory = false}) =>
+        Padding(
           padding: const EdgeInsets.symmetric(vertical: 5),
           child: Row(children: [
-            Icon(ok ? Icons.check_circle : icon, size: 20, color: ok ? green : red),
+            Icon(ok ? Icons.check_circle : icon, size: 20, color: ok ? green : (advisory ? amber : red)),
             const SizedBox(width: 12),
             Expanded(child: Text(label, style: const TextStyle(fontSize: 13))),
             if (ok)
@@ -146,7 +153,7 @@ class _ReliabilityCardState extends State<ReliabilityCard> with WidgetsBindingOb
         row(S.t(lang, 'rel_battery'), _s['battery'] == true, Icons.battery_saver_outlined,
             st.requestBatteryExempt),
         row(S.t(lang, 'rel_dnd'), _s['dnd'] == true, Icons.do_not_disturb_on_outlined,
-            st.requestDndAccess),
+            st.requestDndAccess, advisory: true),
         // Android 14+ only: without this the lockscreen takeover degrades to a
         // banner and the spoken AR/FR announcement never runs at all.
         if (_s.containsKey('fsi'))
