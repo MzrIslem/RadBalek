@@ -65,7 +65,7 @@ void main() {
 
     expect(find.text('Rad Balek'), findsOneWidget);
     expect(find.textContaining('Vigilance rouge'), findsWidgets); // hero + list entry
-    expect(find.text('Wilayas en rouge'), findsOneWidget); // KPI tile label
+    expect(find.text('Autour de moi'), findsOneWidget); // nearby tile label (current v1.0)
     expect(find.textContaining('Canicule'), findsWidgets);
   });
 
