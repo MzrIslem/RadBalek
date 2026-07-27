@@ -101,10 +101,14 @@ class _ReliabilityCardState extends State<ReliabilityCard> with WidgetsBindingOb
     // Volume is advisory (the siren forces the alarm stream up at ring time),
     // so it never blocks the "all good" verdict — but a muted alarm is still
     // worth showing, because it is the #1 "it didn't ring" cause.
+    // 'fsi' is absent on Android < 14 and on older builds of this app — treat
+    // a missing value as OK so the checklist never invents a failure.
+    final fsiOk = _s['fsi'] != false;
     final allOk = checked &&
         _s['notifs'] == true &&
         _s['channel'] == true &&
         _s['battery'] == true &&
+        fsiOk &&
         vol >= 0.3;
 
     Widget row(String label, bool ok, IconData icon, Future<void> Function() fix) => Padding(
@@ -143,6 +147,10 @@ class _ReliabilityCardState extends State<ReliabilityCard> with WidgetsBindingOb
             st.requestBatteryExempt),
         row(S.t(lang, 'rel_dnd'), _s['dnd'] == true, Icons.do_not_disturb_on_outlined,
             st.requestDndAccess),
+        // Android 14+ only: without this the lockscreen takeover degrades to a
+        // banner and the spoken AR/FR announcement never runs at all.
+        if (_s.containsKey('fsi'))
+          row(S.t(lang, 'rel_fsi'), fsiOk, Icons.fullscreen_exit, st.requestFsi),
         row(S.t(lang, 'rel_volume'), vol >= 0.3, Icons.volume_off_outlined, st.openSoundSettings),
         const SizedBox(height: 10),
         if (allOk)

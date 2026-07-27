@@ -110,11 +110,32 @@ class MainActivity : FlutterActivity() {
                         "channel" to channelOk,
                         "battery" to pm.isIgnoringBatteryOptimizations(packageName),
                         "dnd" to (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || nm.isNotificationPolicyAccessGranted),
-                        "volume" to vol
+                        "volume" to vol,
+                        // Android 14+ gates full-screen intents behind an appop
+                        // that is DENIED by default for non-alarm apps. Without
+                        // it the red lockscreen takeover degrades to a banner
+                        // and the AR/FR announcement (which lives in
+                        // AlertActivity) never runs. Upgrades keep the old
+                        // grant, fresh installs may not — so each phone must
+                        // report its own state instead of us guessing.
+                        "fsi" to (Build.VERSION.SDK_INT < 34 || nm.canUseFullScreenIntent())
                     ))
                 }
                 "openSoundSettings" -> {
                     try { startActivity(Intent(Settings.ACTION_SOUND_SETTINGS)) } catch (_: Exception) {}
+                    result.success(true)
+                }
+                // Android 14+ settings page where the user grants full-screen
+                // alerts to this app.
+                "requestFsi" -> {
+                    if (Build.VERSION.SDK_INT >= 34) {
+                        try {
+                            startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                                Uri.parse("package:$packageName")))
+                        } catch (_: Exception) {
+                            try { startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)) } catch (_: Exception) {}
+                        }
+                    }
                     result.success(true)
                 }
                 else -> result.notImplemented()

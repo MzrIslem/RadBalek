@@ -576,6 +576,13 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Android 14+ "full-screen alerts" permission page for this app.
+  Future<void> requestFsi() async {
+    try {
+      await _ch.invokeMethod('requestFsi');
+    } catch (_) {}
+  }
+
   /// Opens the emergency channel's own settings page.
   Future<void> openEmergencyChannel() async {
     try {
@@ -596,6 +603,9 @@ class AppState extends ChangeNotifier {
         'battery': r['battery'] == true,
         'dnd': r['dnd'] == true,
         'volume': (r['volume'] as num?)?.toDouble() ?? 1.0,
+        // Only present on Android 14+; absent means "not applicable", which the
+        // checklist treats as OK rather than inventing a failure.
+        if (r['fsi'] != null) 'fsi': r['fsi'] == true,
       };
       _cacheReliability(s);
       return s;
