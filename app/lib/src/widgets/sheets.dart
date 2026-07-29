@@ -1,4 +1,6 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../ai.dart';
@@ -73,6 +75,114 @@ String stampAgo(String? iso, String lang) {
 String wLabel(AppState st, List<Wilaya> ws) {
   if (ws.isEmpty) return st.lang == 'ar' ? 'الجزائر' : 'Algérie';
   return ws.map((w) => st.lang == 'ar' ? 'ولاية ${w.ar}' : w.fr).join('، ');
+}
+
+/// A self-contained, shareable alert card — mirrors the sheet header (guaranteed
+/// legible container/onContainer pairing) so a screenshot shared to WhatsApp /
+/// Facebook carries the hazard, wilaya, window and top actions. WhatsApp is
+/// where Algeria actually forwards warnings, so this doubles as reach.
+Widget _shareCard(BuildContext context, AppState st, AlertItem a) {
+  final lang = st.lang;
+  final v = vigilance(a.color, false); // always the light palette — legible on any chat background
+  final acts = S.actions(lang, a.hazard).take(3).toList();
+  return Container(
+    width: 380,
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+    clipBehavior: Clip.antiAlias,
+    child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(height: 6, width: double.infinity, color: v.solid),
+      Container(
+        width: double.infinity,
+        color: v.container,
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(hazardIcon(a.hazard), color: v.onContainer, size: 26),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('${S.t(lang, a.hazard)} — ${S.t(lang, a.color)}',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: v.onContainer)),
+            ),
+          ]),
+          const SizedBox(height: 6),
+          Text('📍 ${wLabel(st, a.wilayas)}',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: v.onContainer)),
+        ]),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('🕐 ${span(a.onset, a.expires)}', style: const TextStyle(fontSize: 13, color: Colors.black87)),
+          const SizedBox(height: 10),
+          Text(S.t(lang, 'action').toUpperCase(),
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: .5, color: v.solid)),
+          const SizedBox(height: 5),
+          for (final act in acts)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('•  ', style: TextStyle(color: Colors.black87)),
+                Expanded(child: Text(act, style: const TextStyle(fontSize: 12.5, height: 1.3, color: Colors.black87))),
+              ]),
+            ),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 8),
+          Row(children: [
+            Text('🛡️ Rad Balek رد بالك',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: v.solid)),
+            const Spacer(),
+            const Text('☎ 14 / 1021', style: TextStyle(fontSize: 12, color: Colors.black54)),
+          ]),
+        ]),
+      ),
+    ]),
+  );
+}
+
+/// Render [_shareCard] to a PNG off-screen and open the share sheet. Rendered
+/// inside the app's Overlay (so it inherits theme + Directionality), translated
+/// far off-viewport so it paints without ever flashing on screen. Text scaling
+/// is pinned so "Texte grand" can't distort the exported image. Returns false
+/// on any failure so the caller can fall back to the text share.
+Future<bool> shareAlertImage(BuildContext context, AppState st, AlertItem a) async {
+  final overlay = Overlay.maybeOf(context);
+  if (overlay == null) return false;
+  final key = GlobalKey();
+  final entry = OverlayEntry(
+    builder: (_) => Positioned(
+      left: 0,
+      top: 0,
+      child: Transform.translate(
+        offset: const Offset(-5000, 0), // paints into its RepaintBoundary layer, never visible
+        child: MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
+          child: Material(
+            type: MaterialType.transparency,
+            child: RepaintBoundary(key: key, child: _shareCard(context, st, a)),
+          ),
+        ),
+      ),
+    ),
+  );
+  overlay.insert(entry);
+  try {
+    await WidgetsBinding.instance.endOfFrame;
+    final ro = key.currentContext?.findRenderObject();
+    if (ro is! RenderRepaintBoundary) return false;
+    final image = await ro.toImage(pixelRatio: 3);
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    if (data == null) return false;
+    await SharePlus.instance.share(ShareParams(
+      files: [XFile.fromData(data.buffer.asUint8List(), mimeType: 'image/png', name: 'rad-balek-alerte.png')],
+    ));
+    return true;
+  } catch (_) {
+    return false;
+  } finally {
+    entry.remove();
+  }
 }
 
 /// Alert detail: the 5-element safety message (source, impact, location,
@@ -158,6 +268,21 @@ void showAlertSheet(BuildContext context, AppState st, AlertItem a) {
                   },
                   icon: const Icon(Icons.share_outlined),
                   label: Text(S.t(lang, 'share')),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final ok = await shareAlertImage(context, st, a);
+                    if (!ok) {
+                      // Capture failed (rare) — never leave the button dead; fall
+                      // back to the text share so the warning still goes out.
+                      final acts = S.actions(lang, a.hazard).map((x) => '• $x').join('\n');
+                      await SharePlus.instance.share(ShareParams(
+                          text:
+                              '⚠️ ${a.headline['fr'] ?? ''}\n${a.headline['ar'] ?? ''}\n🕐 ${span(a.onset, a.expires)}\n$acts\n— Rad Balek رد بالك'));
+                    }
+                  },
+                  icon: const Icon(Icons.image_outlined),
+                  label: Text(S.t(lang, 'share_image')),
                 ),
                 OutlinedButton.icon(
                   onPressed: () {
