@@ -9,6 +9,7 @@ import '../strings.dart';
 import '../theme.dart';
 import '../voice.dart';
 import '../widgets/sheets.dart';
+import '../widgets/skeleton.dart';
 import '../widgets/transitions.dart';
 import 'chat.dart';
 import 'consignes.dart';
@@ -29,24 +30,24 @@ class HomeScreen extends StatelessWidget {
     final lang = st.lang;
     final cs = Theme.of(context).colorScheme;
     if (snap == null) {
-      // Watermark: the Signal Khamsa "watching over you" while data loads.
-      // Audit fix: a failed first load used to leave a spinner forever with no
-      // way out — fatal on a weak network, which is when an EWS matters most.
+      // A failed first load must NOT spin forever — fatal on a weak network,
+      // which is when an EWS matters most. Failed → khamsa + retry; still
+      // loading → a layout-shaped skeleton (calmer than a spinner, and it
+      // previews what's coming).
       final failed = st.sourceStatus == 'offline';
+      if (!failed) return const HomeSkeleton();
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Opacity(opacity: .18, child: Image.asset('assets/logo.png', width: 120, height: 120)),
           const SizedBox(height: 20),
-          if (!failed) const CircularProgressIndicator() else ...[
-            Text(S.t(lang, 'load_fail'),
-                style: TextStyle(fontSize: 13.5, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 12),
-            FilledButton.tonalIcon(
-              onPressed: () => st.refresh(force: true),
-              icon: const Icon(Icons.refresh, size: 18),
-              label: Text(S.t(lang, 'retry')),
-            ),
-          ],
+          Text(S.t(lang, 'load_fail'),
+              style: TextStyle(fontSize: 13.5, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          const SizedBox(height: 12),
+          FilledButton.tonalIcon(
+            onPressed: () => st.refresh(force: true),
+            icon: const Icon(Icons.refresh, size: 18),
+            label: Text(S.t(lang, 'retry')),
+          ),
         ]),
       );
     }

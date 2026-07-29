@@ -73,6 +73,15 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       (Icons.settings_outlined, Icons.settings, S.t(lang, 'nav_settings')),
     ];
 
+    // Count of active (non-yellow) alerts touching the user's own wilayas —
+    // shown as a red badge on the Alerts tab so it's visible from any screen.
+    final myCodes = {...st.myWilayas, if (st.hereWilaya != null) st.hereWilaya!};
+    final myAlertCount = (st.snapshot?.alerts ?? const [])
+        .where((a) => a.color != 'yellow' && a.wilayas.any((w) => myCodes.contains(w.code)))
+        .length;
+    Widget badged(Widget icon, int i) =>
+        (i == 0 && myAlertCount > 0) ? Badge.count(count: myAlertCount, child: icon) : icon;
+
     int navIndex() => switch (_index) { 1 => 1, 2 => 3, _ => 0 };
 
     void onSelect(int i) {
@@ -138,8 +147,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
               selectedIndex: navIndex(),
               onDestinationSelected: onSelect,
               labelType: NavigationRailLabelType.all,
-              destinations: [for (final (o, f, l) in destinations)
-                NavigationRailDestination(icon: Icon(o), selectedIcon: Icon(f), label: Text(l))],
+              destinations: [for (final (i, d) in destinations.indexed)
+                NavigationRailDestination(icon: badged(Icon(d.$1), i), selectedIcon: badged(Icon(d.$2), i), label: Text(d.$3))],
             ),
             const VerticalDivider(width: 1),
             Expanded(child: animatedBody),
@@ -152,8 +161,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         bottomNavigationBar: NavigationBar(
           selectedIndex: navIndex(),
           onDestinationSelected: onSelect,
-          destinations: [for (final (o, f, l) in destinations)
-            NavigationDestination(icon: Icon(o), selectedIcon: Icon(f), label: l)],
+          destinations: [for (final (i, d) in destinations.indexed)
+            NavigationDestination(icon: badged(Icon(d.$1), i), selectedIcon: badged(Icon(d.$2), i), label: d.$3)],
         ),
       );
     });
