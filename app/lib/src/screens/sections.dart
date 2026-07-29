@@ -14,7 +14,11 @@ import '../widgets/cards.dart';
 /// watermark loader while the first snapshot lands.
 class _SectionScaffold extends StatelessWidget {
   final String title;
-  final Widget Function(BuildContext, AppState, Snapshot) body;
+  // Returns the flat list of rows (headers + cards) rather than one big Column,
+  // so the ListView's SliverList only inflates the rows on screen. A national
+  // ONM feed is ~80 alerts; the old single-Column child rendered every card at
+  // once on every rebuild.
+  final List<Widget> Function(BuildContext, AppState, Snapshot) body;
   const _SectionScaffold({required this.title, required this.body});
 
   @override
@@ -42,7 +46,13 @@ class _SectionScaffold extends StatelessWidget {
             )
           : RefreshIndicator(
               onRefresh: () => st.refresh(force: true),
-              child: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 28), children: [body(context, st, snap)]),
+              // Flat children (not one Column) → SliverList inflates only the
+              // visible rows. ListView stretches each to full width, exactly as
+              // the home feed already renders these same cards.
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+                children: body(context, st, snap),
+              ),
             ),
     );
   }
@@ -76,7 +86,7 @@ class OfficialAlertsScreen extends StatelessWidget {
           ...snap.alerts.where((a) => a.wilayas.any((w) => myCodes.contains(w.code))),
           ...snap.alerts.where((a) => !a.wilayas.any((w) => myCodes.contains(w.code))),
         ];
-        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        return [
           if (myCodes.isNotEmpty) ...[
             sectionHeader(ctx, S.t(lang, 'mywilayas')),
             myWilayasStrip(ctx, st, snap),
@@ -92,7 +102,7 @@ class OfficialAlertsScreen extends StatelessWidget {
             sectionHeader(ctx, S.t(lang, 'byhazard')),
             statGrid(ctx, st, snap),
           ],
-        ]);
+        ];
       },
     );
   }
@@ -113,13 +123,13 @@ class NearbyScreen extends StatelessWidget {
         // Streamlined: duplicate reports (same category + wilaya) collapse into
         // one card with a ×N count, on top of the server-side AI moderation.
         final groups = dedupeReports(mine);
-        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        return [
           sectionHeader(ctx, S.t(lang, 'nearby'), badge: S.t(lang, 'unofficial')),
           if (groups.isEmpty)
             _emptyNote(ctx, Icons.location_off_outlined, S.t(lang, 'nearby_none'))
           else
             for (final g in groups) reportCard(ctx, st, g.rep, count: g.count),
-        ]);
+        ];
       },
     );
   }
@@ -139,7 +149,7 @@ class TerrainScreen extends StatelessWidget {
         final incidents = incidentCards(ctx, st, snap);
         final community = st.reports.take(12).toList();
         final empty = incidents.isEmpty && community.isEmpty;
-        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        return [
           if (empty)
             _emptyNote(ctx, Icons.spa_outlined, S.t(lang, 'terrain_none'),
                 color: vigilance('green', st.dark).solid)
@@ -153,7 +163,7 @@ class TerrainScreen extends StatelessWidget {
               for (final r in community) reportCard(ctx, st, r),
             ],
           ],
-        ]);
+        ];
       },
     );
   }
