@@ -34,5 +34,7 @@ build/
 # Contains the real KV namespace id — use wrangler.toml.example as the template
 ingest/wrangler.toml
 
-# Internal design notes kept local, not published
+# Internal design/ops notes kept local, not published
 docs/thermal-sensing.md
+docs/PLAYSTORE.md
+docs/audit-and-optimization.md
