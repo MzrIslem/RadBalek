@@ -73,22 +73,15 @@ class MainActivity : FlutterActivity() {
                 // Direct call for personal SOS contacts. Official short codes
                 // go to the dialer (Android forbids ACTION_CALL to emergency
                 // numbers anyway); first personal use asks for CALL_PHONE.
+                // Always ACTION_DIAL — no CALL_PHONE permission (dropped for Play).
+                // The number is pre-filled in the dialer; one tap connects. Works
+                // for official short codes (14/17/1055) and personal SOS alike.
                 "directCall" -> {
                     val num = call.argument<String>("number") ?: ""
-                    val official = num.length <= 4
                     try {
-                        if (!official && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-                            checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
-                            requestPermissions(arrayOf(Manifest.permission.CALL_PHONE), 7002)
-                            startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$num")))
-                        } else if (official) {
-                            startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$num")))
-                        } else {
-                            startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$num")))
-                        }
+                        startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$num")))
                         result.success(true)
                     } catch (e: Exception) {
-                        try { startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$num"))) } catch (_: Exception) {}
                         result.success(false)
                     }
                 }
