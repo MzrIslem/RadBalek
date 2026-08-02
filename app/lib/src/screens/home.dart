@@ -60,7 +60,10 @@ class HomeScreen extends StatelessWidget {
     for (final a in snap.alerts) {
       if (a.wilayas.any((w) => myCodes.contains(w.code))) {
         mineTop ??= a;
-        if (a.color == 'red') {
+        // Only a still-valid red drives the full-screen crisis takeover. An
+        // expired red (only possible in a cached/offline snapshot) still shows
+        // as the hero card with its dated window — visible but not screaming.
+        if (a.color == 'red' && a.active) {
           redHere ??= a;
           break;
         }
@@ -485,12 +488,17 @@ class HomeScreen extends StatelessWidget {
                 runSpacing: gap,
                 alignment: WrapAlignment.center,
                 children: [
-                  tile('🌡️', '${((w['feels'] ?? w['t'] ?? 0) as num).round()}°', S.t(lang, 'feels')),
-                  tile('💨', '${((w['wind'] ?? 0) as num).round()} km/h', S.t(lang, 'layer_w')),
-                  tile('💧', '${w['rh']}%', S.t(lang, 'layer_h')),
-                  if (aq != null)
+                  // Missing weather = tile omitted, never a fabricated "0°" /
+                  // "null%" / green "good" (green is reserved for real all-clear).
+                  if (w['feels'] != null || w['t'] != null)
+                    tile('🌡️', '${((w['feels'] ?? w['t']) as num).round()}°', S.t(lang, 'feels')),
+                  if (w['wind'] != null)
+                    tile('💨', '${(w['wind'] as num).round()} km/h', S.t(lang, 'layer_w')),
+                  if (w['rh'] != null)
+                    tile('💧', '${w['rh']}%', S.t(lang, 'layer_h')),
+                  if (aq != null && aq['band'] != null && aq['aqi'] != null)
                     tile('🍃', 'AQI ${aq['aqi']}', S.t(lang, 'aq_$aqBand'), tint: aqColor),
-                  if (f != null)
+                  if (f != null && f['peak48'] != null)
                     tile('📈', '$arrow ${f['peak48']}°', S.t(lang, 'fc48')),
                 ],
               );

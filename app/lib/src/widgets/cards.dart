@@ -336,7 +336,10 @@ Widget reportCard(BuildContext context, AppState st, CitizenReport r, {int count
               style: TextStyle(fontSize: 11, color: confirmed ? vigilance('green', st.dark).solid : cs.onSurfaceVariant)),
         ]),
       ),
-      ConfirmButton(id: r.id, confirms: r.confirms),
+      // Keyed by report id: the feed re-sorts on every refresh, so without a
+      // stable key the local 👍 "done" state stuck to the slot and jumped to a
+      // different report (misattributed community confirmation).
+      ConfirmButton(key: ValueKey(r.id), id: r.id, confirms: r.confirms),
     ]),
   );
 }

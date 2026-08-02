@@ -72,6 +72,18 @@ String stampAgo(String? iso, String lang) {
   return '$dm · $hm · $rel';
 }
 
+/// Current-conditions line with unknown fields dropped. A wilaya whose
+/// Open-Meteo call failed is still emitted with all-null fields, which leaked
+/// "null°C (null°) · 💨 null km/h · 💧 null%". Returns '' when nothing is known.
+String wxLine(Map w) {
+  final parts = <String>[];
+  final t = w['t'], feels = w['feels'], wind = w['wind'], rh = w['rh'];
+  if (t is num) parts.add('${t.round()}°C${feels is num ? ' (${feels.round()}°)' : ''}');
+  if (wind is num) parts.add('💨 ${wind.round()} km/h');
+  if (rh != null) parts.add('💧 $rh%');
+  return parts.join(' · ');
+}
+
 String wLabel(AppState st, List<Wilaya> ws) {
   if (ws.isEmpty) return st.lang == 'ar' ? 'الجزائر' : 'Algérie';
   return ws.map((w) => st.lang == 'ar' ? 'ولاية ${w.ar}' : w.fr).join('، ');
@@ -228,9 +240,9 @@ void showAlertSheet(BuildContext context, AppState st, AlertItem a) {
                   Text(span(a.onset, a.expires))),
               if (a.wilayas.isNotEmpty && st.weather[a.wilayas.first.code] != null)
                 Builder(builder: (_) {
-                  final w = st.weather[a.wilayas.first.code]!;
-                  return _row5(ctx, Icons.thermostat, S.t(lang, 'cond'),
-                      Text('${w['t']}°C (${w['feels']}°) · 💨 ${w['wind']} km/h · 💧 ${w['rh']}%'));
+                  final line = wxLine(st.weather[a.wilayas.first.code]!);
+                  if (line.isEmpty) return const SizedBox.shrink();
+                  return _row5(ctx, Icons.thermostat, S.t(lang, 'cond'), Text(line));
                 }),
               if (a.hazard == 'heat' || a.hazard == 'flood' || a.hazard == 'quake') ...[
                 _row5(ctx, Icons.warning_amber_outlined, S.t(lang, 'sym'), Text(S.t(lang, 'sym_${a.hazard}'))),

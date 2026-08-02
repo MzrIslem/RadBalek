@@ -822,7 +822,9 @@ class _MapScreenState extends State<MapScreen> {
   // Rule-based 48h heat trend from the worker (no ML): peak feels-like + arrow.
   Widget _forecastTile(BuildContext context, AppState st, Map f) {
     final lang = st.lang;
-    final risk = f['risk'] as String? ?? 'low';
+    // Missing forecast must NOT paint green "risque faible" — hide the tile.
+    final risk = f['risk'] as String?;
+    if (risk == null || f['peak48'] == null) return const SizedBox.shrink();
     final v = vigilance(
         risk == 'extreme' ? 'red' : risk == 'high' ? 'orange' : risk == 'moderate' ? 'yellow' : 'green', st.dark);
     final trend = f['trend'] as String? ?? 'flat';
@@ -838,7 +840,9 @@ class _MapScreenState extends State<MapScreen> {
   // Air quality (European AQI) from Open-Meteo — banded to our color scale.
   Widget _airTile(BuildContext context, AppState st, Map aq) {
     final lang = st.lang;
-    final band = aq['band'] as String? ?? 'good';
+    // Missing AQ must NOT paint green "Bonne" — hide the tile.
+    final band = aq['band'] as String?;
+    if (band == null || aq['aqi'] == null) return const SizedBox.shrink();
     final v = vigilance(
         band == 'veryPoor' ? 'red' : band == 'poor' ? 'orange' : band == 'moderate' ? 'yellow' : 'green', st.dark);
     return ListTile(
@@ -900,14 +904,11 @@ class _MapScreenState extends State<MapScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (st.weather[code] != null)
+        if (st.weather[code] != null && wxLine(st.weather[code]!).isNotEmpty)
           ListTile(
             dense: true,
             leading: Icon(Icons.thermostat, color: cs.onSurfaceVariant),
-            title: Text(
-              '${st.weather[code]!['t']}°C (${st.weather[code]!['feels']}°) · 💨 ${st.weather[code]!['wind']} km/h · 💧 ${st.weather[code]!['rh']}%',
-              style: const TextStyle(fontSize: 13),
-            ),
+            title: Text(wxLine(st.weather[code]!), style: const TextStyle(fontSize: 13)),
           ),
         if (st.weather[code]?['f'] != null)
           _forecastTile(context, st, st.weather[code]!['f'] as Map),

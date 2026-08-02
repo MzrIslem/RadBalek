@@ -6,7 +6,10 @@ class Wilaya {
   const Wilaya({required this.code, required this.fr, required this.ar});
 
   factory Wilaya.fromJson(Map<String, dynamic> j) =>
-      Wilaya(code: (j['code'] as num).toInt(), fr: j['fr'] as String? ?? '', ar: j['ar'] as String? ?? '');
+      // Guarded: one malformed `code` (null / "16") used to throw and, via the
+      // bare catch in AppState, drop the WHOLE snapshot — every alert nationwide
+      // vanished silently.
+      Wilaya(code: (j['code'] as num?)?.toInt() ?? 0, fr: j['fr'] as String? ?? '', ar: j['ar'] as String? ?? '');
 
   String name(String lang) => lang == 'ar' ? ar : fr;
 }
@@ -35,6 +38,15 @@ class AlertItem {
     required this.wilayas,
     required this.headline,
   });
+
+  /// Still valid right now. A LIVE snapshot never carries an expired alert (the
+  /// worker filters them), but a CACHED snapshot rendered offline can — and an
+  /// expired red must not drive the full-screen crisis takeover as if live.
+  bool get active {
+    if (expires == null || expires!.isEmpty) return true;
+    final e = DateTime.tryParse(expires!);
+    return e == null || !e.isBefore(DateTime.now());
+  }
 
   factory AlertItem.fromJson(Map<String, dynamic> j) => AlertItem(
         id: j['id'] as String? ?? '',
@@ -164,18 +176,26 @@ class Snapshot {
   factory Snapshot.fromJson(Map<String, dynamic> j) {
     final stats = (j['stats'] as Map?) ?? const {};
     Map<String, int> intMap(dynamic m) =>
-        ((m as Map?) ?? const {}).map((k, v) => MapEntry(k.toString(), (v as num).toInt()));
+        ((m as Map?) ?? const {}).map((k, v) => MapEntry(k.toString(), v is num ? v.toInt() : 0));
+    // Per-item resilient parse: one malformed alert/incident drops ITSELF, not
+    // the entire snapshot (which would blank every alert in the country).
+    List<T> parseEach<T>(dynamic list, T Function(Map<String, dynamic>) fromJson) {
+      final out = <T>[];
+      for (final e in (list as List?) ?? const []) {
+        try {
+          out.add(fromJson(e as Map<String, dynamic>));
+        } catch (_) {}
+      }
+      return out;
+    }
     return Snapshot(
       generatedAt: j['generatedAt'] as String? ?? '',
       byColor: intMap(stats['byColor']),
       byHazard: intMap(stats['byHazard']),
       ongoingFires: ((stats['dgpcSitrep'] as Map?)?['ongoing'] as num?)?.toInt() ?? 0,
-      alerts: ((j['alerts'] as List?) ?? const [])
-          .map((a) => AlertItem.fromJson(a as Map<String, dynamic>))
-          .toList()
+      alerts: parseEach(j['alerts'], AlertItem.fromJson)
         ..sort((a, b) => _rank(a.color).compareTo(_rank(b.color))),
-      incidents:
-          ((j['incidents'] as List?) ?? const []).map((i) => Incident.fromJson(i as Map<String, dynamic>)).toList(),
+      incidents: parseEach(j['incidents'], Incident.fromJson),
     );
   }
 
