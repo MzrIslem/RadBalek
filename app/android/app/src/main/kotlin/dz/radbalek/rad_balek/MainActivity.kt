@@ -184,23 +184,9 @@ class MainActivity : FlutterActivity() {
             val notif = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
-            val alarm = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ALARM)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
-
-            // RED — civil-defense wail on the ALARM stream: rings even in silent;
-            // bypasses DND once notification-policy access is granted.
-            nm.createNotificationChannel(
-                NotificationChannel("emergency_s2", "Alerte rouge — تحذير أحمر", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "Alertes vitales — sirène, sonne même en silencieux (ONM)"
-                    enableVibration(true)
-                    vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 700)
-                    enableLights(true)
-                    setBypassDnd(true)
-                    setSound(rawUri(R.raw.rb_high), alarm)
-                    lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
-                }
-            )
+            // RED channel — single source of truth in RbMessagingService, so the
+            // service can also create it if a red lands before the app is opened.
+            RbMessagingService.ensureRedChannel(this)
             // ORANGE — ascending warning tone.
             nm.createNotificationChannel(
                 NotificationChannel("orange_s2", "Vigilance orange — تحذير برتقالي", NotificationManager.IMPORTANCE_DEFAULT).apply {

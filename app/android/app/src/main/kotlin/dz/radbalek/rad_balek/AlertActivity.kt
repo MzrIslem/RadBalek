@@ -191,6 +191,7 @@ class AlertActivity : Activity() {
         val fr = (intent.getStringExtra("spoken_fr") ?: intent.getStringExtra("title") ?: "").let(::speakable)
         val ar = (intent.getStringExtra("spoken_ar") ?: intent.getStringExtra("body") ?: "").let(::speakable)
         if (fr.isBlank() && ar.isBlank()) return
+        val handler = Handler(Looper.getMainLooper())
         tts = TextToSpeech(this) { status ->
             if (status != TextToSpeech.SUCCESS) { Log.i("RBSIREN", "TTS init failed"); return@TextToSpeech }
             val t = tts ?: return@TextToSpeech
@@ -199,27 +200,43 @@ class AlertActivity : Activity() {
                     .setUsage(AudioAttributes.USAGE_ALARM)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
             } catch (_: Exception) {}
-            val arOk = ar.isNotBlank() && try { t.isLanguageAvailable(Locale("ar")) >= TextToSpeech.LANG_AVAILABLE } catch (_: Exception) { false }
+            fun voiceOk(loc: Locale) = try { t.isLanguageAvailable(loc) >= TextToSpeech.LANG_AVAILABLE } catch (_: Exception) { false }
+            // French was NEVER checked before — on a phone with only the system
+            // voice installed, setLanguage(FRENCH) returned MISSING_DATA, speak()
+            // returned ERROR (ignored), and NOTHING was spoken in either language
+            // even when the Arabic voice was ready.
+            val frOk = fr.isNotBlank() && voiceOk(Locale.FRENCH)
+            val arOk = ar.isNotBlank() && voiceOk(Locale("ar"))
+            if (!frOk && !arOk) { Log.i("RBSIREN", "no TTS voice available"); return@TextToSpeech }
+            // The siren MUST never stay pinned at 12%: speak() can return ERROR
+            // without throwing (missing voice data) and the engine can die
+            // mid-utterance (routine on Xiaomi/Oppo), so no callback fires. A
+            // deadline un-duck is the backstop; every speak() return is checked.
+            val unduck = Runnable { duckSiren(false) }
+            fun armGuard() { handler.removeCallbacks(unduck); handler.postDelayed(unduck, 15000) }
+            fun say(text: String, loc: Locale, id: String) {
+                try {
+                    t.language = loc
+                    if (t.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) duckSiren(false) else armGuard()
+                } catch (_: Exception) { duckSiren(false) }
+            }
             t.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(id: String?) { runOnUiThread { duckSiren(true) } }
+                override fun onStart(id: String?) { runOnUiThread { duckSiren(true); armGuard() } }
                 override fun onError(id: String?) { runOnUiThread { duckSiren(false) } }
+                override fun onStop(id: String?, interrupted: Boolean) { runOnUiThread { duckSiren(false) } }
                 override fun onDone(id: String?) {
-                    if (id == "fr" && arOk) {
-                        runOnUiThread {
-                            try { t.language = Locale("ar"); t.speak(ar, TextToSpeech.QUEUE_FLUSH, null, "ar") } catch (_: Exception) { runOnUiThread { duckSiren(false) } }
-                        }
-                    } else runOnUiThread { duckSiren(false) }
+                    if (id == "fr" && arOk) runOnUiThread { say(ar, Locale("ar"), "ar") }
+                    else runOnUiThread { duckSiren(false) }
                 }
             })
             // Let the siren wail first (grab attention), then speak over it ducked.
-            Handler(Looper.getMainLooper()).postDelayed({
+            handler.postDelayed({
                 try {
                     t.setSpeechRate(0.95f)
-                    if (fr.isNotBlank()) { t.language = Locale.FRENCH; t.speak(fr, TextToSpeech.QUEUE_FLUSH, null, "fr") }
-                    else if (arOk) { t.language = Locale("ar"); t.speak(ar, TextToSpeech.QUEUE_FLUSH, null, "ar") }
+                    if (frOk) say(fr, Locale.FRENCH, "fr") else if (arOk) say(ar, Locale("ar"), "ar")
                 } catch (e: Exception) { Log.e("RBSIREN", "speak failed: ${e.message}") }
             }, 2500)
-            Log.i("RBSIREN", "TTS ready (arVoice=$arOk)")
+            Log.i("RBSIREN", "TTS ready (frVoice=$frOk arVoice=$arOk)")
         }
     }
 
@@ -243,6 +260,18 @@ class AlertActivity : Activity() {
             focus?.let { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) am.abandonAudioFocusRequest(it) }
         } catch (_: Exception) {}
         try { (getSystemService(Context.VIBRATOR_SERVICE) as Vibrator).cancel() } catch (_: Exception) {}
+    }
+
+    // A SECOND red while this face is showing (e.g. a flood red on top of an
+    // active fire red): the full-screen intent resolves to this singleTask
+    // instance, so onCreate does NOT re-run — without this, alert #1's text
+    // stayed on screen and the service's new fallback siren looped orphaned
+    // alongside. Swap to the new intent and rebuild.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        RbMessagingService.stopSiren() // silence the fallback siren the service just started
+        recreate()                     // onCreate re-reads the new alert, restarts siren + voice
     }
 
     // HOME (or any app switch) reaches onStop, NOT onDestroy — and

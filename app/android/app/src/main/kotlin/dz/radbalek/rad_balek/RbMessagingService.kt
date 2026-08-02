@@ -1,6 +1,7 @@
 package dz.radbalek.rad_balek
 
 import android.app.Notification
+import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
@@ -8,6 +9,8 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
+import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.core.app.NotificationCompat
@@ -27,6 +30,35 @@ class RbMessagingService : FlutterFirebaseMessagingService() {
     companion object {
         private var player: MediaPlayer? = null
         private val handler = Handler(Looper.getMainLooper())
+
+        /// Single source of truth for the RED siren channel. It used to be
+        /// created ONLY in MainActivity.onCreate, so a red arriving after an app
+        /// update / clear-data but BEFORE the app was next opened made notify()
+        /// throw ("No channel found") → no full-screen face. Idempotent: Android
+        /// ignores a re-create and never mutates an existing channel, so calling
+        /// this from both showRed() and MainActivity is safe.
+        fun ensureRedChannel(ctx: Context) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+            val nm = ctx.getSystemService(NotificationManager::class.java)
+            if (nm.getNotificationChannel("emergency_s2") != null) return
+            val alarm = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+            // Numeric R id (not a name-based URI): the release build obfuscates
+            // resource names, so android.resource://…/raw/rb_high resolves to
+            // nothing — only compile-time ids survive.
+            nm.createNotificationChannel(
+                NotificationChannel("emergency_s2", "Alerte rouge — تحذير أحمر", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "Alertes vitales — sirène, sonne même en silencieux (ONM)"
+                    enableVibration(true)
+                    vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 700)
+                    enableLights(true)
+                    setBypassDnd(true)
+                    setSound(Uri.parse("android.resource://${ctx.packageName}/${R.raw.rb_high}"), alarm)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                }
+            )
+        }
 
         /// Called from MainActivity.onResume — opening the app stops the wail.
         /// stop() and release() MUST be in separate try blocks: stop() throws
@@ -69,6 +101,7 @@ class RbMessagingService : FlutterFirebaseMessagingService() {
     private fun showRed(d: Map<String, String>) {
         val title = d["headline_fr"] ?: "🔴 Alerte rouge — رد بالك"
         val body = d["headline_ar"] ?: "اتبعوا التعليمات — Suivez les consignes"
+        ensureRedChannel(this) // create the channel if the app hasn't run since install/update
 
         // 1) Defeat "alarm volume at zero": raise, never lower. RED only.
         try {
