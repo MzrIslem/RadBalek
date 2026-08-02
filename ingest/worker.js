@@ -52,8 +52,11 @@ export default {
     // the full URL, so ?lite=1 caches separately from the full snapshot.
     const CACHE_TTL = {
       "/v1/alerts.json": 120,
-      "/v1/reports.json": 120, // >=86.4s = under the 1k/day list quota alone
-      "/v1/reports.csv": 300, // 1 list + up to 1000 gets — must be cached
+      // Edge caches are PER-COLO: Algerian traffic spreads over several POPs,
+      // so each TTL miss costs a list+N-gets per colo. 600/1800 keeps the
+      // read/list fan-out inside the free quota even from 3-4 colos.
+      "/v1/reports.json": 600,
+      "/v1/reports.csv": 1800, // 1 list + up to 1000 gets — must be cached hard
       "/v1/history.json": 300, // kills the 168-get burst per history open
       "/v1/weather.json": 600,
       // NOTE: /v1/fwi.png and /v1/burnt.png are intentionally NOT edge-cached.
@@ -254,9 +257,17 @@ async function reconcileFires(env, snap) {
   try {
     const fires = (snap.incidents || []).filter((i) => i.source === "firms");
     if (!snap.stats.firmsSkipped) {
-      // Fresh FIRMS this cycle (even zero fires is a valid all-clear) — cache it.
+      // Fresh FIRMS this cycle (even zero fires is a valid all-clear) — cache it,
+      // but WRITE-ON-CHANGE only: the unconditional put burned 144 KV writes/day
+      // (14% of the whole 1k budget) re-storing data that changes ~4x/day.
+      // `at` is excluded from the comparison (it changes every cycle by design).
       try {
-        await env.EWS_KV.put("firms:last", JSON.stringify({ at: snap.generatedAt, fires }));
+        const body = JSON.stringify(fires);
+        let prev = null;
+        try {
+          prev = JSON.stringify(JSON.parse((await env.EWS_KV.get("firms:last")) || "{}").fires ?? null);
+        } catch {}
+        if (body !== prev) await env.EWS_KV.put("firms:last", JSON.stringify({ at: snap.generatedAt, fires }));
       } catch {}
       return;
     }

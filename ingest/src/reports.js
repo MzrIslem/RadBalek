@@ -115,8 +115,15 @@ export async function handleConfirmReport(request, env) {
   const raw = await env.EWS_KV.get(id);
   if (!raw) return json({ error: "not found" }, 404);
   const ck = await clientKey(request);
+  // Rate limit: confirm was the ONLY public POST without one — each call costs
+  // 2 KV writes (quota abuse) and inflates the community-trust signal.
+  const rl = Number((await env.EWS_KV.get(`cf:${ck}`)) || 0);
+  if (rl >= 20) return json({ error: "rate limit" }, 429);
   const marker = `rc:${id}:${ck}`;
   if (await env.EWS_KV.get(marker)) return json({ ok: true, already: true });
+  try {
+    await env.EWS_KV.put(`cf:${ck}`, String(rl + 1), { expirationTtl: 3600 });
+  } catch {}
   const report = JSON.parse(raw);
   if (report.ck === ck) return json({ ok: true, own: true }); // no self-confirm
   report.confirms += 1;
@@ -172,7 +179,15 @@ async function listReports(env, limit, { includeHidden = false } = {}) {
   for (const k of listed.keys) {
     const raw = await env.EWS_KV.get(k.name);
     if (!raw) continue;
-    const { ck: _omit, ...pub } = JSON.parse(raw);
+    // One malformed value must drop ONE report, not 500 the whole public feed
+    // (and store() won't cache a 500, so every request would re-run the fan-out).
+    let pub;
+    try {
+      const { ck: _omit, ...rest } = JSON.parse(raw);
+      pub = rest;
+    } catch {
+      continue;
+    }
     if (!includeHidden && HIDDEN.has(pub.status)) continue;
     out.push(pub);
   }
@@ -182,7 +197,9 @@ async function listReports(env, limit, { includeHidden = false } = {}) {
 export async function handleListReports(url, env) {
   const limit = Math.min(Number(url.searchParams.get("limit") || 100), 200);
   const reports = await listReports(env, limit);
-  return json({ count: reports.length, reports }, 200, { "cache-control": "no-store" });
+  // No no-store here: worker.js store() edge-caches this response and rewrites
+  // cache-control anyway — the mixed directives confused clients.
+  return json({ count: reports.length, reports });
 }
 
 export async function handleExportCsv(env) {

@@ -223,6 +223,11 @@ export async function sendPush(env, notifications, alerts, errors = [], onmEntri
   // --- crisis heartbeats for still-active red alerts ---
   summary.heartbeats = 0;
   for (const a of alerts) {
+    // The 5-error budget must stop the OUTER loop too: the inner `break` only
+    // escaped one alert's wilayas, so with FCM auth broken and 20 red wilayas
+    // the cycle kept issuing doomed fetches into the 50-subrequest ceiling —
+    // and the calls it starved were the all-clears at the tail.
+    if (summary.errors.length >= 5) break;
     if (summary.sent + summary.heartbeats >= MAX_SENDS_PER_CYCLE) break;
     if (a.color !== "red" || !a.onset) continue;
     if (a.expires && Date.parse(a.expires) < now) continue;
