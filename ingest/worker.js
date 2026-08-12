@@ -256,31 +256,47 @@ export default {
 async function reconcileFires(env, snap) {
   try {
     const fires = (snap.incidents || []).filter((i) => i.source === "firms");
-    if (!snap.stats.firmsSkipped) {
-      // Fresh FIRMS this cycle (even zero fires is a valid all-clear) — cache it,
-      // but WRITE-ON-CHANGE only: the unconditional put burned 144 KV writes/day
-      // (14% of the whole 1k budget) re-storing data that changes ~4x/day.
-      // `at` is excluded from the comparison (it changes every cycle by design).
+    // One read serves both paths (the write-on-change comparison needed it
+    // anyway) — this costs no extra KV reads over the previous version.
+    let cached = null;
+    try {
+      cached = JSON.parse((await env.EWS_KV.get("firms:last")) || "null");
+    } catch {}
+    const cacheUsable =
+      cached &&
+      Array.isArray(cached.fires) &&
+      cached.fires.length &&
+      Date.parse(snap.generatedAt) - Date.parse(cached.at) < 3 * 3600 * 1000;
+
+    // A fetch that SUCCEEDS but returns zero fires is not automatically an
+    // all-clear. FIRMS answers HTTP 200 with an empty CSV during its daily
+    // NRT gap, and the old code took that at face value: it blanked the map
+    // AND overwrote the cache with [], destroying the very fallback built for
+    // this. So zero-on-top-of-a-recent-non-empty-cache is treated exactly like
+    // a skipped cycle — serve the last known fires, marked stale, and leave the
+    // cache alone. The 3h bound still lets a genuinely fire-free Algeria
+    // (winter) converge to empty on its own.
+    const untrustedZero = !snap.stats.firmsSkipped && !fires.length && cacheUsable;
+
+    if (!snap.stats.firmsSkipped && !untrustedZero) {
+      // Fresh, trusted FIRMS this cycle — cache it, but WRITE-ON-CHANGE only:
+      // the unconditional put burned 144 KV writes/day (14% of the whole 1k
+      // budget) re-storing data that changes ~4x/day. `at` is excluded from the
+      // comparison (it changes every cycle by design).
       try {
         const body = JSON.stringify(fires);
-        let prev = null;
-        try {
-          prev = JSON.stringify(JSON.parse((await env.EWS_KV.get("firms:last")) || "{}").fires ?? null);
-        } catch {}
+        const prev = cached ? JSON.stringify(cached.fires ?? null) : null;
         if (body !== prev) await env.EWS_KV.put("firms:last", JSON.stringify({ at: snap.generatedAt, fires }));
       } catch {}
       return;
     }
-    const raw = await env.EWS_KV.get("firms:last");
-    if (!raw) return;
-    const cached = JSON.parse(raw);
-    const fresh = Date.parse(snap.generatedAt) - Date.parse(cached.at) < 3 * 3600 * 1000;
-    if (!fresh || !cached.fires || !cached.fires.length) return;
+    if (!cacheUsable) return;
     for (const f of cached.fires) f.stale = true;
     snap.incidents.push(...cached.fires);
     snap.stats.fireClusters = cached.fires.length;
     snap.stats.incidents = snap.incidents.length;
     snap.stats.firmsFromCache = true;
+    if (untrustedZero) snap.stats.firmsEmptyUpstream = true;
   } catch {}
 }
 

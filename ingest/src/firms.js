@@ -6,7 +6,22 @@ const DZ_BBOX = "-8.7,18.9,12.0,37.3"; // west,south,east,north
 
 export const FIRMS_SOURCES = ["VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT", "MODIS_NRT"];
 
-export async function fetchFirmsHotspots(mapKey, { days = 1, sources = FIRMS_SOURCES, fetchFn = fetch } = {}) {
+// FIRMS `day_range` counts back from the CURRENT UTC date, not from the latest
+// date that actually has data. NRT for "today" only appears a few hours into
+// the UTC day, so `day_range=1` returns an EMPTY CSV (HTTP 200, header only)
+// from 00:00 UTC until FIRMS catches up — verified against production history:
+// the fire map went to zero for 3-5h every single night for 7 nights straight
+// in peak fire season (28 of 168 hourly samples, always 00:00-04:00 UTC).
+// So we always ask for 2 days and clip to a rolling window ourselves. That also
+// makes the displayed window CONSTANT (~24h) instead of "however much of the
+// UTC day has elapsed", which is what day_range=1 really meant.
+export const FIRMS_DAY_RANGE = 2;
+export const FIRMS_MAX_AGE_HOURS = 24;
+
+export async function fetchFirmsHotspots(
+  mapKey,
+  { days = FIRMS_DAY_RANGE, sources = FIRMS_SOURCES, fetchFn = fetch, maxAgeHours = FIRMS_MAX_AGE_HOURS, now = () => new Date() } = {}
+) {
   if (!mapKey) return { skipped: true, reason: "FIRMS_MAP_KEY not set", hotspots: [] };
   mapKey = String(mapKey).trim(); // secrets piped via shell can carry a stray \r\n
   // Fetch all satellite sources CONCURRENTLY. They used to run in a sequential
@@ -27,18 +42,29 @@ export async function fetchFirmsHotspots(mapKey, { days = 1, sources = FIRMS_SOU
       return parseFirmsCsv(await res.text(), src);
     })
   );
-  const hotspots = [];
+  const all = [];
   const errors = [];
   for (const r of results) {
-    if (r.status === "fulfilled") hotspots.push(...r.value);
+    if (r.status === "fulfilled") all.push(...r.value);
     else errors.push(String(r.reason && r.reason.message ? r.reason.message : r.reason));
   }
   // Only a TOTAL wipeout is "skipped" — partial sensor coverage is still useful
   // fire data and must reach the map.
-  if (!hotspots.length && errors.length === sources.length) {
+  if (!all.length && errors.length === sources.length) {
     return { skipped: true, reason: errors.join("; "), hotspots: [] };
   }
-  return { skipped: false, hotspots, errors };
+  return { skipped: false, hotspots: withinLastHours(all, maxAgeHours, now()), errors };
+}
+
+// Clip the 2-day fetch to a rolling window. An unparseable timestamp is KEPT:
+// dropping a detection we merely failed to date is the dangerous direction.
+export function withinLastHours(hotspots, hours, now = new Date()) {
+  if (!Number.isFinite(hours) || hours <= 0) return hotspots;
+  const cutoff = now.getTime() - hours * 3600 * 1000;
+  return hotspots.filter((h) => {
+    const t = Date.parse(h.observedAt);
+    return Number.isFinite(t) ? t >= cutoff : true;
+  });
 }
 
 export function parseFirmsCsv(csv, sourceName) {

@@ -18,6 +18,7 @@ import { hazardFromEvent } from "../src/capfeed.js";
 import { severityColor, fcmTopicsFor } from "../src/normalize.js";
 import { makeWilayaResolver } from "../src/geo.js";
 import { fwiClass } from "../src/fwi.js";
+import { fetchFirmsHotspots, withinLastHours, FIRMS_DAY_RANGE } from "../src/firms.js";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const geo = JSON.parse(readFileSync(join(__dir, "..", "data", "wilayas.json"), "utf8"));
@@ -84,6 +85,32 @@ test("resolveWilaya: OFFSHORE epicentres resolve (widened radius), far sea stays
   assert.equal(resolve(36.76, 3.47)?.code, 35, "Boumerdes onshore");
   // Far out to sea must NOT be attributed to a wilaya even when widened.
   assert.equal(resolve(39.5, 4.0, 1.5), null, "far sea stays null");
+});
+
+test("FIRMS: never asks for day_range=1 (the nightly blank-fire-map bug)", async () => {
+  // FIRMS resolves day_range against the CURRENT UTC date, which has no NRT
+  // data until hours into the day: day_range=1 returned an EMPTY CSV every
+  // night 00:00-04:00 UTC, blanking the fire map in peak fire season.
+  assert.ok(FIRMS_DAY_RANGE >= 2, "day_range must cover yesterday");
+  const asked = [];
+  const fetchFn = async (url) => {
+    asked.push(url);
+    return { ok: true, text: async () => "" };
+  };
+  await fetchFirmsHotspots("KEY", { fetchFn, sources: ["VIIRS_SNPP_NRT"] });
+  assert.equal(asked.length, 1);
+  assert.ok(asked[0].endsWith(`/${FIRMS_DAY_RANGE}`), `requested "${asked[0]}" — day_range must be ${FIRMS_DAY_RANGE}`);
+});
+
+test("withinLastHours: clips the 2-day fetch, keeps undateable rows", () => {
+  const now = new Date("2026-08-12T00:40:00Z");
+  const rows = [
+    { id: "yesterday-ok", observedAt: "2026-08-11T13:00:00Z" }, // inside 24h
+    { id: "too-old", observedAt: "2026-08-10T13:00:00Z" }, // 35h — the extra day we only fetched to survive the gap
+    { id: "undateable", observedAt: "not-a-date" }, // keep: never DROP a detection we merely failed to date
+  ];
+  const kept = withinLastHours(rows, 24, now).map((r) => r.id);
+  assert.deepEqual(kept, ["yesterday-ok", "undateable"]);
 });
 
 test("fwiClass: EFFIS thresholds are exact (public, defensible scale)", () => {
