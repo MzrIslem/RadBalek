@@ -2,7 +2,7 @@
 # Usage: .\deploy-beta.ps1 "release notes here"
 param([string]$Notes = "Rad Balek beta update")
 
-$env:PATH = "C:\AISX\flutter\bin;" + $env:PATH
+$env:PATH = "C:\AISX\_toolchain\flutter\bin;" + $env:PATH
 $env:GOOGLE_APPLICATION_CREDENTIALS = "C:\AISX\algeria-ews\firebase-sa.json"
 Set-Location C:\AISX\algeria-ews\app
 
