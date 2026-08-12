@@ -82,6 +82,7 @@ class Incident {
   final String? headlineFr; // press / dgpc.dz posts carry their own title
   final String? link; // source article, for "lire la source"
   final String? sourceName; // e.g. "TSA", "Ennahar", "Protection Civile (dgpc.dz)"
+  final bool stale; // fire re-served from cache during a FIRMS outage — "last known"
 
   const Incident({
     required this.id,
@@ -101,6 +102,7 @@ class Incident {
     this.headlineFr,
     this.link,
     this.sourceName,
+    this.stale = false,
   });
 
   factory Incident.fromJson(Map<String, dynamic> j) => Incident(
@@ -123,6 +125,7 @@ class Incident {
         headlineFr: ((j['headline'] as Map?)?['fr'])?.toString(),
         link: j['link'] as String?,
         sourceName: j['sourceName'] as String?,
+        stale: j['stale'] as bool? ?? false,
       );
 }
 

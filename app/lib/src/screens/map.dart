@@ -755,6 +755,12 @@ class _MapScreenState extends State<MapScreen> {
               _kv(ctx, Icons.place_outlined,
                   '${wLabel(st, i.wilayas)}${i.commune != null ? ' · ${i.commune}' : ''}'),
               if (stamp.isNotEmpty) _kv(ctx, Icons.schedule, '${S.t(lang, 'detected')} · $stamp'),
+              if (i.stale)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: _kv(ctx, Icons.history_toggle_off, S.t(lang, 'stale_fire'),
+                      color: vigilance('orange', st.dark).solid),
+                ),
               if (isQuake) ...[
                 _kv(ctx, Icons.public, '${S.t(lang, 'source')}: EMSC · M${i.mag ?? '?'}'),
                 if (i.lat != null && i.lon != null)
