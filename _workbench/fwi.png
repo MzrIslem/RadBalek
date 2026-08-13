@@ -1,0 +1,5 @@
+<HTML>
+<HEAD><TITLE>MapServer Message</TITLE></HEAD>
+<BODY BGCOLOR="#FFFFFF">
+msLoadSymbolSet(): Unknown identifier. SYMBOL token found outside SYMBOLSET context. When nesting multiple SYMBOLSETs, make sure the SYMBOLSET/END pairs match.
+</BODY></HTML>
