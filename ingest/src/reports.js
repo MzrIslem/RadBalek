@@ -15,7 +15,24 @@ import { makeWilayaResolver } from "./geo.js";
 
 export const CATEGORIES = ["fire", "smoke", "road", "flood", "animal", "heat", "other"];
 const MAX_PER_HOUR = 10; // AI moderation + community-confirm handle bad content
+// Fallback only. `ck` is the reporter's pseudonym stored next to their report:
+// with a salt that is public in this file, anyone who reads the KV namespace can
+// re-identify a reporter by hashing candidate IPs. Set the REPORT_SALT secret in
+// production to make that infeasible.
 const SALT = "radbalek-v1";
+
+// request.json() happily returns null, 42 or "x" for a syntactically valid body,
+// and every handler below then reads `.category`/`.id`/`.text` off it — which
+// throws on null and makes the worker answer 500 to a one-byte request. Only a
+// real object is accepted.
+export async function jsonObject(request) {
+  try {
+    const b = await request.json();
+    return b && typeof b === "object" && !Array.isArray(b) ? b : null;
+  } catch {
+    return null;
+  }
+}
 
 // Newest-first lexicographic key: inverse epoch millis, zero-padded.
 function reportKey(now, rand) {
@@ -23,17 +40,25 @@ function reportKey(now, rand) {
   return `r:${inv}:${rand}`;
 }
 
-async function clientKey(request) {
+async function clientKey(request, env) {
   const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SALT + ip));
+  const salt = (env && env.REPORT_SALT) || SALT;
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(salt + ip));
   return [...new Uint8Array(buf.slice(0, 8))].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// `*` is deliberate and safe HERE: these are the public feed and the anonymous
+// report/feedback intake, they carry no credentials and the worker never trusts
+// a cookie, so any site may read them. Admin responses must NOT use this (see
+// admin.js) — a wildcard there would let any page the curator visits read their
+// dashboard. No allow-credentials, and only content-type is accepted, so a
+// cross-origin caller cannot smuggle an Authorization header either.
 export function corsHeaders(extra = {}) {
   return {
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET,POST,OPTIONS",
     "access-control-allow-headers": "content-type",
+    "x-content-type-options": "nosniff",
     ...extra,
   };
 }
@@ -51,16 +76,12 @@ export async function handleWilayasList() {
 }
 
 export async function handleCreateReport(request, env, wilayasGeojson, now = new Date()) {
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return json({ error: "invalid json" }, 400);
-  }
+  const body = await jsonObject(request);
+  if (!body) return json({ error: "invalid json" }, 400);
   const category = String(body.category || "");
   if (!CATEGORIES.includes(category)) return json({ error: "bad category" }, 400);
 
-  const ck = await clientKey(request);
+  const ck = await clientKey(request, env);
   const rl = Number((await env.EWS_KV.get(`rl:${ck}`)) || 0);
   if (rl >= MAX_PER_HOUR) return json({ error: "rate limit" }, 429);
 
@@ -104,17 +125,13 @@ export async function handleCreateReport(request, env, wilayasGeojson, now = new
 }
 
 export async function handleConfirmReport(request, env) {
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return json({ error: "invalid json" }, 400);
-  }
+  const body = await jsonObject(request);
+  if (!body) return json({ error: "invalid json" }, 400);
   const id = String(body.id || "");
   if (!/^r:\d{14}:[a-z0-9]+$/.test(id)) return json({ error: "bad id" }, 400);
   const raw = await env.EWS_KV.get(id);
   if (!raw) return json({ error: "not found" }, 404);
-  const ck = await clientKey(request);
+  const ck = await clientKey(request, env);
   // Rate limit: confirm was the ONLY public POST without one — each call costs
   // 2 KV writes (quota abuse) and inflates the community-trust signal.
   const rl = Number((await env.EWS_KV.get(`cf:${ck}`)) || 0);
@@ -141,17 +158,13 @@ const HIDDEN = new Set(["spam", "rejected"]);
 // POST /v1/feedback {type: bug|idea|comment, rating?: 1-5, text, version?, lang?}
 // App feedback for the dev team (admin page only — never a public feed).
 export async function handleFeedback(request, env) {
-  let b;
-  try {
-    b = await request.json();
-  } catch {
-    return json({ error: "invalid json" }, 400);
-  }
+  const b = await jsonObject(request);
+  if (!b) return json({ error: "invalid json" }, 400);
   const type = ["bug", "idea", "comment"].includes(b.type) ? b.type : "comment";
   const text = String(b.text || "").slice(0, 600).replace(/[<>]/g, "").trim();
   const rating = Number.isInteger(b.rating) && b.rating >= 1 && b.rating <= 5 ? b.rating : null;
   if (!text && !rating) return json({ error: "empty" }, 400);
-  const ck = await clientKey(request);
+  const ck = await clientKey(request, env);
   const rl = Number((await env.EWS_KV.get(`fbrl:${ck}`)) || 0);
   if (rl >= 3) return json({ error: "rate limit" }, 429);
   const inv = String(10_000_000_000_000 - Date.now()).padStart(14, "0");
@@ -195,7 +208,11 @@ async function listReports(env, limit, { includeHidden = false } = {}) {
 }
 
 export async function handleListReports(url, env) {
-  const limit = Math.min(Number(url.searchParams.get("limit") || 100), 200);
+  // KV rejects a non-integer or out-of-range limit with a 500 from list(), so
+  // ?limit=-1 / abc / 1e9 used to take the public feed down.
+  const raw = url.searchParams.get("limit");
+  const asked = Math.trunc(Number(raw));
+  const limit = raw && Number.isFinite(asked) ? Math.min(Math.max(asked, 1), 200) : 100;
   const reports = await listReports(env, limit);
   // No no-store here: worker.js store() edge-caches this response and rewrites
   // cache-control anyway — the mixed directives confused clients.
@@ -204,7 +221,14 @@ export async function handleListReports(url, env) {
 
 export async function handleExportCsv(env) {
   const reports = await listReports(env, 1000);
-  const esc = (v) => (v === null || v === undefined ? "" : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+  // A cell starting with = + - @ is a formula to Excel/Sheets, so a reported
+  // description could execute when the curator opens this export; a leading
+  // apostrophe keeps it text.
+  const esc = (v) => {
+    if (v === null || v === undefined) return "";
+    const s = /^[=+\-@\t\r]/.test(String(v)) ? `'${v}` : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
   const rows = [
     "id,at,category,wilaya,lat,lon,description,lang,status,confirms",
     ...reports.map((r) => [r.id, r.at, r.category, r.wilaya, r.lat, r.lon, r.description, r.lang, r.status, r.confirms].map(esc).join(",")),

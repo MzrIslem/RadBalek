@@ -71,8 +71,14 @@ let GH={at:0,data:null};
 function setTab(t){TAB=t;localStorage.setItem("rb_admin_tab",t);boot()}
 // Key travels in the Authorization header only — never in the URL.
 const auth=()=>({headers:{authorization:"Bearer "+KEY}});
-const esc=s=>String(s==null?"":s).replace(/</g,"&lt;");
-const attr=s=>String(s==null?"":s).replace(/"/g,"&quot;");
+// Everything below builds HTML with innerHTML, so every interpolated value
+// must be fully escaped: replacing only "<" (or only the quote, for
+// attributes) still lets a stored value close an attribute or inject an
+// onerror= handler. Reports/feedback text is attacker-supplied, and the
+// dashboard runs with the ADMIN_KEY in localStorage — one injected script here
+// hands over moderation.
+const esc=s=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+const attr=esc;
 function ago(iso){if(!iso)return"—";const m=Math.round((Date.now()-Date.parse(iso))/60000);
   if(m<1)return"à l’instant";if(m<60)return"il y a "+m+" min";if(m<48*60)return"il y a "+Math.round(m/60)+" h";return"il y a "+Math.round(m/1440)+" j"}
 function saveKey(){KEY=document.getElementById("key").value.trim();localStorage.setItem("rb_admin_key",KEY);boot()}
@@ -257,7 +263,7 @@ function paint(reports,snap,push){
     '<div class="card"><div class="row"><div class="tx">'+
     '<div class="t1">'+(CATS[r.category]||r.category)+' — '+(NAMES[r.wilaya]||("W"+(r.wilaya||"?")))+'</div>'+
     '<div class="t2">'+new Date(r.at).toLocaleString("fr")+(r.lat?' · '+r.lat.toFixed(3)+","+r.lon.toFixed(3):"")+
-    (r.description?'<br>« '+r.description.replace(/</g,"&lt;")+' »':"")+
+    (r.description?'<br>« '+esc(r.description)+' »':"")+
     ' · 👍 '+(r.confirms||0)+'</div>'+
     '<span class="st s-'+r.status+'">'+r.status+'</span>'+
     ((r.status!=="verified"&&r.status!=="rejected")?

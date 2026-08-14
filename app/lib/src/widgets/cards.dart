@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../app_state.dart';
+import '../links.dart';
 import '../models.dart';
 import '../strings.dart';
 import '../theme.dart';
@@ -214,7 +214,7 @@ Widget sourceCard(BuildContext context, AppState st, Incident i, {required bool 
   final cs = Theme.of(context).colorScheme;
   final accent = official ? vigilance('green', st.dark).solid : cs.onSurfaceVariant;
   return InkWell(
-    onTap: i.link == null ? null : () => launchUrl(Uri.parse(i.link!), mode: LaunchMode.externalApplication),
+    onTap: i.link == null ? null : () => openWebLink(i.link),
     borderRadius: BorderRadius.circular(22),
     child: Container(
       margin: const EdgeInsets.only(bottom: 12),

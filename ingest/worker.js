@@ -123,7 +123,23 @@ export default {
       return resp;
     }
     if (path === "/admin")
-      return new Response(ADMIN_HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+      return new Response(ADMIN_HTML, {
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "no-store",
+          // The dashboard holds the ADMIN_KEY in localStorage, so an injected
+          // script here is a full moderation takeover: allow no external script
+          // or connection at all (the page is one inline script + api.github.com
+          // for download counts), and no framing, so the key can't be clickjacked
+          // out of a page embedding /admin.
+          "content-security-policy":
+            "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; " +
+            "connect-src 'self' https://api.github.com; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+          "x-frame-options": "DENY",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+        },
+      });
     if (path === "/v1/admin/reports") return handleAdminList(req, url, env);
     if (path === "/v1/admin/moderate" && req.method === "POST") return handleModerate(req, url, env);
     if (path === "/v1/admin/overview") return handleAdminOverview(req, url, env);
@@ -131,22 +147,20 @@ export default {
     // Force an immediate pipeline collect (no push — pushes stay cron-only so
     // concurrent invocations can never race the dedupe map and double-send).
     if (path === "/v1/admin/refresh" && req.method === "POST") {
-      if (!(await adminAuthed(req, url, env)))
-        return new Response(JSON.stringify({ error: "forbidden" }), {
-          status: 403,
-          headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }),
+      // Admin answers: no CORS grant (nothing but the dashboard may read them)
+      // and no upstream error text (it can carry keyed source URLs).
+      const adminJson = (o, s = 200) =>
+        new Response(JSON.stringify(o), {
+          status: s,
+          headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "referrer-policy": "no-referrer" },
         });
+      if (!(await adminAuthed(req, url, env))) return adminJson({ error: "forbidden" }, 403);
       try {
         const snap = await refresh(env);
-        return new Response(
-          JSON.stringify({ ok: true, generatedAt: snap.generatedAt, byColor: snap.stats.byColor, errors: snap.errors.length }),
-          { headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }) }
-        );
+        return adminJson({ ok: true, generatedAt: snap.generatedAt, byColor: snap.stats.byColor, errors: snap.errors.length });
       } catch (err) {
-        return new Response(JSON.stringify({ error: String(err && err.message) }), {
-          status: 500,
-          headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }),
-        });
+        console.error("admin refresh:", err && err.message);
+        return adminJson({ error: "refresh failed" }, 500);
       }
     }
     if (path === "/v1/test-push" && req.method === "POST") return handleTestPush(req, env, ctx);
@@ -217,8 +231,19 @@ export default {
     if (path === "/v1/reports.csv") return store(await handleExportCsv(env));
 
     if (path === "/v1/push-status.json") {
-      const raw = (await env.EWS_KV.get("push:last")) || '{"neverRan":true}';
-      return new Response(raw, {
+      // Projection, not the raw KV doc: push:last also holds `fatal` and
+      // `errors[]` straight from FCM (device tokens, project details, quota
+      // state) and this route is public. Counters + a health flag are all the
+      // app and the dashboard read; the full record stays behind
+      // /v1/admin/overview.
+      let last = null;
+      try {
+        last = JSON.parse((await env.EWS_KV.get("push:last")) || "null");
+      } catch {}
+      const body = last
+        ? { at: last.at ?? null, sent: last.sent ?? null, deduped: last.deduped ?? null, ok: !last.fatal }
+        : { neverRan: true };
+      return new Response(JSON.stringify(body), {
         headers: corsHeaders({ "content-type": "application/json; charset=utf-8", "cache-control": "no-store" }),
       });
     }
