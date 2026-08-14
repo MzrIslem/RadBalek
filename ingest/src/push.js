@@ -8,6 +8,7 @@
 // Dedupe: KV key sent:{alertId} (3-day TTL) so the 10-min cron never re-sends.
 
 import { wilayaByCode } from "./wilayas.js";
+import { errText, logSwallowed } from "./log.js";
 
 const SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 // Free-plan Workers allow 50 subrequests/invocation; the pipeline uses ~10.
@@ -77,7 +78,9 @@ export async function getAccessToken(sa, env) {
   if (env) {
     try {
       await env.EWS_KV.put("fcm_token", tok, { expirationTtl: 3300 });
-    } catch {}
+    } catch (err) {
+      logSwallowed("kv:put fcm_token", err);
+    }
   }
   return tok;
 }
@@ -147,7 +150,8 @@ export async function sendPush(env, notifications, alerts, errors = [], onmEntri
   let sa;
   try {
     sa = JSON.parse(env.FIREBASE_SA);
-  } catch {
+  } catch (err) {
+    logSwallowed("FIREBASE_SA parse", err);
     return { ...summary, errors: [{ error: "FIREBASE_SA is not valid JSON" }] };
   }
   const byId = new Map(alerts.map((a) => [a.id, a]));
@@ -155,14 +159,24 @@ export async function sendPush(env, notifications, alerts, errors = [], onmEntri
   // Guarded: this is the FIRST statement of the delivery path. An unguarded KV
   // read here threw on a quota 429 and killed every push for the rest of the
   // day. Losing the dedupe map costs a duplicate; losing the cycle costs lives.
+  //
+  // Losing it is cheap but NOT free — every already-delivered red re-sends, so
+  // the siren fires again on phones that already rang. Flag it in the summary
+  // (the watchdog pages on it) instead of letting it pass as a normal cycle.
   let sentRaw = "{}";
   try {
     sentRaw = (await env.EWS_KV.get("sentmap")) || "{}";
-  } catch {}
+  } catch (err) {
+    summary.dedupeLost = errText(err);
+    logSwallowed("kv:get sentmap", err);
+  }
   let sentMap = {};
   try {
     sentMap = JSON.parse(sentRaw);
-  } catch {}
+  } catch (err) {
+    summary.dedupeLost = errText(err);
+    logSwallowed("sentmap parse", err);
+  }
   for (const k of Object.keys(sentMap)) if (sentMap[k] < now) delete sentMap[k];
 
   // Red-first: a life-critical red must never be starved by orange pushes that
@@ -208,7 +222,9 @@ export async function sendPush(env, notifications, alerts, errors = [], onmEntri
       if (res.status === 401 || res.status === 403) {
         try {
           await env.EWS_KV.delete("fcm_token");
-        } catch {}
+        } catch (err) {
+          logSwallowed("kv:delete fcm_token", err);
+        }
         token = null;
       }
       if (!res.ok) throw new Error(`FCM HTTP ${res.status}: ${(await res.text()).slice(0, 160)}`);
@@ -270,19 +286,31 @@ export async function sendPush(env, notifications, alerts, errors = [], onmEntri
   summary.allclear = 0;
   const currentTopics = delivered;
   let prevRaw = "[]";
+  // An unreadable activetopics is indistinguishable from "nothing was active":
+  // the diff finds no stale topics, and the write below would then REPLACE the
+  // real list with this cycle's — so topics still owed an all-clear are lost
+  // forever. Treat it as a degraded cycle: no diff, no write, state survives.
+  let activeTopicsUnavailable = false;
   try {
     prevRaw = (await env.EWS_KV.get("activetopics")) || "[]";
-  } catch {}
+  } catch (err) {
+    activeTopicsUnavailable = true;
+    logSwallowed("kv:get activetopics", err);
+  }
   let prevTopics = [];
   try {
     prevTopics = JSON.parse(prevRaw);
-  } catch {}
+  } catch (err) {
+    activeTopicsUnavailable = true;
+    logSwallowed("activetopics parse", err);
+  }
+  if (activeTopicsUnavailable) summary.activeTopicsUnavailable = true;
   // DEGRADED CYCLE: if the ONM fetch failed (or returned nothing), `alerts` is
   // empty for a reason that has nothing to do with hazards ending — every
   // active topic would diff out and get "✅ Fin d'alerte" mid-emergency, and
   // the re-send would then be suppressed by sentmap. Skip the diff entirely and
   // leave activetopics untouched so the state survives the blip.
-  const degraded = (errors || []).some((e) => e.source === "onm") || !onmEntries;
+  const degraded = (errors || []).some((e) => e.source === "onm") || !onmEntries || activeTopicsUnavailable;
   if (degraded) summary.allclearSkipped = true;
   const HAZ = {
     heat: ["Canicule", "موجة الحر"],
@@ -340,13 +368,20 @@ export async function sendPush(env, notifications, alerts, errors = [], onmEntri
   try {
     const sentOut = JSON.stringify(sentMap);
     if (sentOut !== sentRaw) await env.EWS_KV.put("sentmap", sentOut);
-  } catch {} // dedupe persistence is best-effort — never fail the cycle
+  } catch (err) {
+    // Best-effort — never fail the cycle. But an unwritten dedupe map means the
+    // next cycle re-sirens everything sent in this one, so it is reported.
+    summary.dedupeUnsaved = errText(err);
+    logSwallowed("kv:put sentmap", err);
+  }
   if (!degraded) {
     try {
       // .sort() so a reordered ONM batch doesn't trigger a pointless write.
       const topicsOut = JSON.stringify([...new Set([...currentTopics, ...carry])].sort());
       if (topicsOut !== JSON.stringify(prevTopics.slice().sort())) await env.EWS_KV.put("activetopics", topicsOut);
-    } catch {}
+    } catch (err) {
+      logSwallowed("kv:put activetopics", err);
+    }
   }
   return summary;
 }

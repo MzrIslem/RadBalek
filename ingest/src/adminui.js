@@ -86,7 +86,7 @@ async function boot(){
     document.getElementById(x[0]).style.background=TAB===x[1]?"var(--grnc)":"var(--s2)"});
   document.getElementById("upd").textContent="· "+new Date().toLocaleTimeString("fr",{hour:"2-digit",minute:"2-digit"});
   if(TAB==="overview"){const o=await aget("/v1/admin/overview");if(!o)return;
-    let h=[];try{h=await(await fetch("/v1/history.json")).json()}catch(e){}
+    let h=[];try{h=await(await fetch("/v1/history.json")).json()}catch(e){console.error("history.json",e)}
     paintOverview(o,h);return}
   if(TAB==="version"){const o=await aget("/v1/admin/overview");if(!o)return;
     const rel=await ghReleases();paintVersion(o,rel);return}
@@ -94,13 +94,13 @@ async function boot(){
   if(r.status===403){localStorage.removeItem("rb_admin_key");KEY="";alert("Clé invalide");return}
   reveal();
   if(!Object.keys(NAMES).length){
-    try{(await (await fetch("/v1/wilayas.json")).json()).forEach(w=>NAMES[w.code]=w.fr)}catch(e){}
+    try{(await (await fetch("/v1/wilayas.json")).json()).forEach(w=>NAMES[w.code]=w.fr)}catch(e){console.error("wilayas.json",e)}
   }
   const data=await r.json();
   if(TAB==="feedback"){paintFb(data.reports||[]);return}
   let snap=null,push=null;
-  try{snap=await (await fetch("/v1/alerts.json?lite=1")).json()}catch(e){}
-  try{push=await (await fetch("/v1/push-status.json")).json()}catch(e){}
+  try{snap=await (await fetch("/v1/alerts.json?lite=1")).json()}catch(e){console.error("alerts.json",e)}
+  try{push=await (await fetch("/v1/push-status.json")).json()}catch(e){console.error("push-status.json",e)}
   paint(data.reports||[],snap,push);
 }
 // ---- 🏠 Système ----

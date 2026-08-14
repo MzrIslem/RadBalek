@@ -1,6 +1,7 @@
 // Gemini via Google AI Studio, server-side (no App Check / Play Integrity
 // dependency — works on every install). Key: env.GEMINI_API_KEY.
 import { corsHeaders } from "./reports.js";
+import { errText, logSwallowed } from "./log.js";
 
 const MODEL = "gemini-flash-lite-latest"; // ~1s vs ~16s for flash-latest
 const json = (o, s = 200) =>
@@ -26,11 +27,20 @@ export async function geminiGenerate(env, { system, contents, maxTokens = 400, t
 async function rateOk(env, request, cap = 40) {
   const ip = request.headers.get("cf-connecting-ip") || "0";
   const key = `air:${ip}`;
-  const n = Number((await env.EWS_KV.get(key)) || 0);
+  let n = 0;
+  try {
+    n = Number((await env.EWS_KV.get(key)) || 0);
+  } catch (err) {
+    // Fail open on a read failure (the assistant keeps working) but say so:
+    // silently, the Gemini spend cap would be gone with no trace.
+    logSwallowed(`kv:get ${key}`, err);
+  }
   if (n >= cap) return false;
   try {
     await env.EWS_KV.put(key, String(n + 1), { expirationTtl: 3600 });
-  } catch {} // counter is best-effort — don't kill the AI on write quota
+  } catch (err) {
+    logSwallowed(`kv:put ${key}`, err); // don't kill the AI on write quota
+  }
   return true;
 }
 
@@ -65,8 +75,9 @@ export async function handleChat(request, env) {
   try {
     const text = await geminiGenerate(env, { system, contents, maxTokens: 260, temperature: 0.4 });
     return json({ text });
-  } catch (e) {
-    return json({ error: String(e.message).slice(0, 160) }, 502);
+  } catch (err) {
+    console.error(`[rb] ai chat failed: ${errText(err)}`);
+    return json({ error: errText(err).slice(0, 160) }, 502);
   }
 }
 
@@ -93,7 +104,8 @@ export async function handleCategory(request, env) {
     const word = out.toLowerCase().replace(/[^a-z]/g, "");
     const cats = ["fire", "smoke", "road", "flood", "animal", "heat", "other"];
     return json({ category: cats.includes(word) ? word : null });
-  } catch (e) {
-    return json({ error: String(e.message).slice(0, 120) }, 502);
+  } catch (err) {
+    console.error(`[rb] ai category failed: ${errText(err)}`);
+    return json({ error: errText(err).slice(0, 120) }, 502);
   }
 }

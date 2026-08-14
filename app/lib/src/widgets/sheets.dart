@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../ai.dart';
 import '../app_state.dart';
+import '../diag.dart';
 import '../models.dart';
 import '../strings.dart';
 import '../theme.dart';
@@ -190,7 +191,8 @@ Future<bool> shareAlertImage(BuildContext context, AppState st, AlertItem a) asy
       files: [XFile.fromData(data.buffer.asUint8List(), mimeType: 'image/png', name: 'rad-balek-alerte.png')],
     ));
     return true;
-  } catch (_) {
+  } catch (err) {
+    logErr('share alert card', err);
     return false;
   } finally {
     entry.remove();

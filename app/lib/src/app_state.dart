@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'api.dart';
+import 'diag.dart';
 import 'geo_utils.dart';
 import 'keys.dart';
 import 'models.dart';
@@ -142,7 +143,8 @@ class AppState extends ChangeNotifier {
       final num = _cleanNum((r?['number'] ?? '').toString());
       if (num.isEmpty) return null;
       return (number: num, name: (r?['name'] ?? '').toString().trim());
-    } catch (_) {
+    } catch (err) {
+      logErr('pickContact', err);
       return null;
     }
   }
@@ -152,10 +154,15 @@ class AppState extends ChangeNotifier {
   Future<void> directCall(String num) async {
     try {
       await _ch.invokeMethod('directCall', {'number': num});
-    } catch (_) {
+    } catch (err) {
+      logErr('directCall', err);
       try {
         await launchUrl(Uri.parse('tel:$num'));
-      } catch (_) {}
+      } catch (err2) {
+        // Both paths gone: the user pressed an emergency number and nothing at
+        // all happened, which must not be invisible in the logs.
+        logErr('directCall dialer fallback', err2);
+      }
     }
   }
 
@@ -202,7 +209,9 @@ class AppState extends ChangeNotifier {
       try {
         snapshot = Snapshot.fromJson(jsonDecode(cached) as Map<String, dynamic>);
         sourceStatus = 'cached';
-      } catch (_) {}
+      } catch (err) {
+        logErr('cached snapshot parse', err);
+      }
     }
     notifyListeners();
     await refresh();
@@ -225,6 +234,13 @@ class AppState extends ChangeNotifier {
 
   Future<void> _initFcm() async {
     if (kIsWeb) return; // web push comes with the web Firebase app registration
+    // Firebase failed to initialise: every messaging call below would throw the
+    // same way, so report the real cause instead of a generic 'error:'.
+    if (firebaseInitError != null) {
+      fcmDiag = 'firebase-init: $firebaseInitError';
+      notifyListeners();
+      return;
+    }
     try {
       final fm = FirebaseMessaging.instance;
       final settings = await fm.requestPermission(alert: true, badge: true, sound: true);
@@ -260,14 +276,31 @@ class AppState extends ChangeNotifier {
         syncTopics();
       });
       notifyListeners();
-    } catch (e) {
-      fcmDiag = 'error: ${e.toString().split('\n').first}';
+    } catch (err) {
+      logErr('fcm init', err);
+      fcmDiag = 'error: ${errText(err)}';
+      notifyListeners(); // the diagnostic changed — the settings page must see it
     }
   }
 
   DateTime? _lastRefresh;
   DateTime? _lastWeather;
   bool _refreshing = false;
+
+  /// Why each optional data source last failed, keyed by source name
+  /// ('snapshot', 'wilayas', 'reports', 'weather', 'boundaries'). A source that
+  /// silently never loads is otherwise indistinguishable from a source with
+  /// nothing to report — the map layer just stays empty.
+  final Map<String, String> sourceErrors = {};
+
+  void _noteSource(String source, [Object? err]) {
+    if (err == null) {
+      sourceErrors.remove(source);
+      return;
+    }
+    sourceErrors[source] = errText(err);
+    logErr(source, err);
+  }
 
   /// [force] bypasses the throttle (pull-to-refresh). Auto-refresh on resume
   /// is throttled to 60s (audit: every resume re-fetched everything + GPS).
@@ -285,15 +318,23 @@ class AppState extends ChangeNotifier {
         sourceStatus = 'live';
         _lastRefresh = DateTime.now();
         SharedPreferences.getInstance().then((p) => p.setString('rb_cache', raw));
-      } catch (_) {
+        _noteSource('snapshot');
+      } catch (err) {
         if (sourceStatus != 'cached') sourceStatus = 'offline';
+        _noteSource('snapshot', err);
       }
       try {
         if (wilayas.isEmpty) wilayas = await api.fetchWilayas();
-      } catch (_) {}
+        _noteSource('wilayas');
+      } catch (err) {
+        _noteSource('wilayas', err);
+      }
       try {
         reports = await api.fetchReports();
-      } catch (_) {}
+        _noteSource('reports');
+      } catch (err) {
+        _noteSource('reports', err);
+      }
       try {
         // Weather is the largest payload — refetch at most every 10 min.
         if (force || _lastWeather == null ||
@@ -301,7 +342,10 @@ class AppState extends ChangeNotifier {
           weather = await api.fetchWeather();
           _lastWeather = DateTime.now();
         }
-      } catch (_) {}
+        _noteSource('weather');
+      } catch (err) {
+        _noteSource('weather', err);
+      }
     } finally {
       _refreshing = false;
     }
@@ -328,7 +372,11 @@ class AppState extends ChangeNotifier {
         updateInfo = info;
         notifyListeners();
       }
-    } catch (_) {}
+    } catch (err) {
+      // Retried on the next launch (_updateChecked is not persisted), so this
+      // stays non-fatal — but a permanently broken check hid every release.
+      logErr('checkForUpdate', err);
+    }
   }
 
   void dismissUpdate() {
@@ -367,7 +415,11 @@ class AppState extends ChangeNotifier {
         await syncTopics();
       }
       notifyListeners();
-    } catch (_) {}
+    } catch (err) {
+      // "Alerts where I am" just stops updating hereWilaya; the subscribed
+      // wilayas still alert, so this is degraded rather than fatal.
+      logErr('locate', err);
+    }
   }
 
   void toggleFollow() {
@@ -388,8 +440,13 @@ class AppState extends ChangeNotifier {
     return _boundariesInflight ??= () async {
       try {
         boundaries = await api.fetchBoundaries();
+        _noteSource('boundaries');
         notifyListeners();
-      } catch (_) {} finally {
+      } catch (err) {
+        // No boundaries means locate() can never resolve a wilaya, so this
+        // failure silently disables "alerts where I am" too.
+        _noteSource('boundaries', err);
+      } finally {
         _boundariesInflight = null;
       }
     }();
@@ -495,8 +552,21 @@ class AppState extends ChangeNotifier {
       }
       await p.setStringList('rb_topics', desired.toList());
       if (token != null) await p.setString('rb_topics_token', token);
-    } catch (_) {}
+      topicsError = null;
+    } catch (err) {
+      // This is the failure that makes a device go quiet while every screen
+      // still looks correct: the subscriptions are wrong, the alert never
+      // arrives. rb_topics is left untouched so the next sync retries the diff.
+      topicsError = errText(err);
+      logErr('syncTopics', err);
+      if (fcmDiag == 'ready') fcmDiag = 'topics-failed';
+      notifyListeners();
+    }
   }
+
+  /// Why the last topic sync failed, if it did. Reported by [sendTestPush] as
+  /// 'topics-failed', because a token-addressed test push succeeds regardless.
+  String? topicsError;
 
   /// Returns 'ok' | 'rate' | 'error' so the UI can explain a rate limit rather
   /// than telling the user to retry when they can't for an hour.
@@ -516,9 +586,10 @@ class AppState extends ChangeNotifier {
   Future<int?> confirm(String id) => api.confirmReport(id);
 
   /// Returns a precise status so the UI can tell the user WHAT failed:
-  /// 'ok' | 'no-permission' | 'no-token' | 'server' | 'error:...'.
+  /// 'ok' | 'no-permission' | 'no-token' | 'server' | 'topics-failed' | 'error:...'.
   Future<String> sendTestPush() async {
     if (kIsWeb) return 'web';
+    if (firebaseInitError != null) return 'error: ${firebaseInitError!}';
     try {
       // Re-request in case it was denied before (Android 13+ POST_NOTIFICATIONS).
       final settings = await FirebaseMessaging.instance.requestPermission();
@@ -531,31 +602,45 @@ class AppState extends ChangeNotifier {
       if (token == null) return 'no-token';
       final ok = await api.testPush(token);
       fcmDiag = ok ? 'ready' : 'server';
-      return ok ? 'ok' : 'server';
-    } catch (e) {
-      return 'error: ${e.toString().split('\n').first}';
+      if (!ok) return 'server';
+      // A test push is addressed to the TOKEN, so it arrives even when topic
+      // subscription failed — reporting 'ok' there told the user real alerts
+      // would ring when no topic was subscribed. Retry the sync and say so.
+      if (topicsError != null) {
+        await syncTopics();
+        if (topicsError != null) return 'topics-failed';
+      }
+      return 'ok';
+    } catch (err) {
+      logErr('sendTestPush', err);
+      return 'error: ${errText(err)}';
     }
   }
 
   static const _ch = MethodChannel('rb/channels');
 
   /// Opens the OS notification settings for this app (to fix denied permission).
-  Future<void> openAppNotifSettings() async {
-    try {
-      await _ch.invokeMethod('openAppNotif');
-    } catch (_) {}
-  }
+  Future<void> openAppNotifSettings() => _openNative('openAppNotif');
 
-  Future<void> requestDndAccess() async {
-    try {
-      await _ch.invokeMethod('requestDndAccess');
-    } catch (_) {}
-  }
+  Future<void> requestDndAccess() => _openNative('requestDndAccess');
 
-  Future<void> requestBatteryExempt() async {
+  Future<void> requestBatteryExempt() => _openNative('requestBatteryExempt');
+
+  /// Opens an OS settings page. On an OEM that ships no such activity the call
+  /// throws and nothing opens; the user is told the button does nothing rather
+  /// than left tapping a dead control.
+  Future<void> _openNative(String method) async {
     try {
-      await _ch.invokeMethod('requestBatteryExempt');
-    } catch (_) {}
+      await _ch.invokeMethod(method);
+    } catch (err) {
+      logErr('native $method', err);
+      scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(
+        content: Text(lang == 'ar'
+            ? 'تعذّر فتح إعدادات النظام — افتحها يدويًا.'
+            : "Impossible d'ouvrir les réglages système — ouvrez-les manuellement."),
+        duration: const Duration(seconds: 4),
+      ));
+    }
   }
 
   // ---- Creator mode (hidden): subscribes this device to backend health
@@ -575,31 +660,21 @@ class AppState extends ChangeNotifier {
         } else {
           await fm.unsubscribeFromTopic('admin');
         }
-      } catch (_) {}
+      } catch (err) {
+        logErr('creatorMode admin topic', err);
+      }
     }
     return creatorMode;
   }
 
   /// Opens the system sound settings (to raise the alarm volume).
-  Future<void> openSoundSettings() async {
-    try {
-      await _ch.invokeMethod('openSoundSettings');
-    } catch (_) {}
-  }
+  Future<void> openSoundSettings() => _openNative('openSoundSettings');
 
   /// Android 14+ "full-screen alerts" permission page for this app.
-  Future<void> requestFsi() async {
-    try {
-      await _ch.invokeMethod('requestFsi');
-    } catch (_) {}
-  }
+  Future<void> requestFsi() => _openNative('requestFsi');
 
   /// Opens the emergency channel's own settings page.
-  Future<void> openEmergencyChannel() async {
-    try {
-      await _ch.invokeMethod('openChannelEmergency');
-    } catch (_) {}
-  }
+  Future<void> openEmergencyChannel() => _openNative('openChannelEmergency');
 
   /// Every switch that can silently stop a red alert from ringing:
   /// {notifs, channel, battery, dnd: bool, volume: 0..1}.
@@ -620,7 +695,10 @@ class AppState extends ChangeNotifier {
       };
       _cacheReliability(s);
       return s;
-    } catch (_) {
+    } catch (err) {
+      // Empty map = "unknown", which the checklist renders as no verdict. Never
+      // cache a verdict from a failed probe: that would claim the siren is fine.
+      logErr('emergencyStatus', err);
       return const {};
     }
   }

@@ -1,4 +1,5 @@
 import 'package:flutter_tts/flutter_tts.dart';
+import 'diag.dart';
 import 'models.dart';
 import 'strings.dart';
 
@@ -34,7 +35,8 @@ class VoiceAlert {
   static Future<bool> _langOk(String code) async {
     try {
       return await _tts.isLanguageAvailable(code) == true;
-    } catch (_) {
+    } catch (err) {
+      logErr('tts isLanguageAvailable $code', err);
       return false;
     }
   }
@@ -63,8 +65,10 @@ class VoiceAlert {
         await _tts.setLanguage(code);
         await _tts.speak(msg);
       }
-    } catch (_) {
-      // TTS engine missing/broken: never let voice failure disturb the alert UI.
+    } catch (err) {
+      // TTS engine missing/broken: never let voice failure disturb the alert UI,
+      // but a device where the spoken alert never works should be diagnosable.
+      logErr('tts announce', err);
     } finally {
       speaking = false;
     }
@@ -74,7 +78,9 @@ class VoiceAlert {
     speaking = false;
     try {
       await _tts.stop();
-    } catch (_) {}
+    } catch (err) {
+      logErr('tts stop', err);
+    }
   }
 
   /// Tap behavior on the red card's speaker button: speaking -> stop, else replay.

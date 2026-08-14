@@ -2,6 +2,7 @@
 // request over wilaya centroids, cached 30 min in KV. Serves /v1/weather.json
 // for the app's map layers: temperature, wind speed, humidity, feels-like.
 import { fwiSeries } from "./fwi.js";
+import { errText, logSwallowed } from "./log.js";
 
 // FFMC/DMC/DC are cumulative, so the index needs a run-up before it means
 // anything. 14 days from the standard startup values is enough for FFMC and
@@ -9,7 +10,14 @@ import { fwiSeries } from "./fwi.js";
 const FWI_SPINUP_DAYS = 14;
 
 export async function handleWeather(env, geo) {
-  const cached = await env.EWS_KV.get("weather");
+  // A KV read failure must not take the whole layer down: without the cache we
+  // just pay for a fresh upstream call.
+  let cached = null;
+  try {
+    cached = await env.EWS_KV.get("weather");
+  } catch (err) {
+    logSwallowed("kv:get weather", err);
+  }
   if (cached)
     return new Response(cached, {
       headers: { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*", "cache-control": "public, max-age=300" },
@@ -43,14 +51,25 @@ export async function handleWeather(env, geo) {
     `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lats}&longitude=${lons}` +
     `&current=european_aqi,pm2_5,pm10&timezone=UTC`;
   const [res, aqRes] = await Promise.all([
-    fetch(url, { headers: { "user-agent": "radbalek/0.1" } }),
-    fetch(aqUrl, { headers: { "user-agent": "radbalek/0.1" } }).catch(() => null),
+    fetch(url, { headers: { "user-agent": "radbalek/0.1" } }).catch((err) => {
+      // Reject with a typed message instead of the bare TypeError a failed
+      // subrequest throws, so the worker log names the upstream that died.
+      throw new Error(`open-meteo unreachable: ${errText(err)}`);
+    }),
+    fetch(aqUrl, { headers: { "user-agent": "radbalek/0.1" } }).catch((err) => {
+      logSwallowed("open-meteo air-quality", err);
+      return null;
+    }),
   ]);
-  if (!res.ok) return new Response('{"error":"upstream"}', { status: 502, headers: { "access-control-allow-origin": "*" } });
+  if (!res.ok) {
+    console.error(`[rb] open-meteo ${res.status} for /v1/weather.json`);
+    return new Response('{"error":"upstream"}', { status: 502, headers: { "access-control-allow-origin": "*" } });
+  }
   let data;
   try {
     data = await res.json();
-  } catch {
+  } catch (err) {
+    console.error(`[rb] open-meteo body unparseable: ${errText(err)}`);
     return new Response('{"error":"upstream body"}', { status: 502, headers: { "access-control-allow-origin": "*" } });
   }
   const arr = Array.isArray(data) ? data : [data];
@@ -60,7 +79,9 @@ export async function handleWeather(env, geo) {
       const aq = await aqRes.json();
       aqArr = Array.isArray(aq) ? aq : [aq];
     }
-  } catch {} // air quality is enrichment — never fail weather over it
+  } catch (err) {
+    logSwallowed("air-quality parse", err); // enrichment — never fail weather over it
+  }
   // European AQI bands → our color tiers.
   const aqBand = (v) => (v == null ? null : v <= 20 ? "good" : v <= 40 ? "fair" : v <= 60 ? "moderate" : v <= 80 ? "poor" : "veryPoor");
   // Rule-based 48h trend (no ML): compare today's feels-like max to the peak
@@ -106,7 +127,9 @@ export async function handleWeather(env, geo) {
           const fuel = c.lat >= 34.5 ? "forest" : c.lat >= 32.5 ? "steppe" : "desert";
           if (r[0]) fire = { fwi: r[0].fwi, class: r[0].class, d1: r[1] ?? null, d2: r[2] ?? null, fuel };
         }
-      } catch {} // fire danger is enrichment — never fail weather over it
+      } catch (err) {
+        logSwallowed(`fwi wilaya ${c.code}`, err); // enrichment — never fail weather over it
+      }
       return {
         code: c.code,
         t: cur.temperature_2m ?? null,
@@ -129,7 +152,9 @@ export async function handleWeather(env, geo) {
   // exactly the heat emergency that consumed the quota.
   try {
     await env.EWS_KV.put("weather", body, { expirationTtl: 1800 });
-  } catch {}
+  } catch (err) {
+    logSwallowed("kv:put weather", err);
+  }
   return new Response(body, {
     headers: { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*", "cache-control": "public, max-age=300" },
   });

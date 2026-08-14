@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'src/app_state.dart';
+import 'src/diag.dart';
 import 'src/keys.dart';
 import 'src/screens/shell.dart';
 import 'src/theme.dart';
@@ -15,7 +16,13 @@ Future<void> main() async {
     // App Check / Play Integrity is needed. Android reads google-services.json.
     try {
       await Firebase.initializeApp();
-    } catch (_) {}
+    } catch (err) {
+      // Kept non-fatal (the maps, reports and cached snapshot still work), but
+      // recorded: this is the single failure that silences every alert, and it
+      // used to leave the app looking perfectly healthy.
+      logErr('firebase init', err);
+      firebaseInitError = errText(err);
+    }
   }
   runApp(const RadBalekApp());
 }

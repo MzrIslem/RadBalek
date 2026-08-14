@@ -12,6 +12,7 @@
 
 import { WILAYAS, wilayaByCode } from "./wilayas.js";
 import { makeWilayaResolver } from "./geo.js";
+import { errText, logSwallowed } from "./log.js";
 
 export const CATEGORIES = ["fire", "smoke", "road", "flood", "animal", "heat", "other"];
 const MAX_PER_HOUR = 10; // AI moderation + community-confirm handle bad content
@@ -95,10 +96,19 @@ export async function handleCreateReport(request, env, wilayasGeojson, now = new
     confirms: 0,
     ck,
   };
-  await env.EWS_KV.put(report.id, JSON.stringify(report), { expirationTtl: 60 * 60 * 24 * 180 });
+  // The report itself is NOT best-effort: if the write fails (KV quota 429) the
+  // report does not exist, and the app must say so rather than show it stored.
+  try {
+    await env.EWS_KV.put(report.id, JSON.stringify(report), { expirationTtl: 60 * 60 * 24 * 180 });
+  } catch (err) {
+    console.error(`[rb] report store failed: ${errText(err)}`);
+    return json({ error: "storage unavailable" }, 503);
+  }
   try {
     await env.EWS_KV.put(`rl:${ck}`, String(rl + 1), { expirationTtl: 3600 });
-  } catch {} // counter is best-effort — the report is already stored
+  } catch (err) {
+    logSwallowed("kv:put report rate-limit counter", err); // the report is already stored
+  }
   const { ck: _omit, ...pub } = report;
   return json({ ok: true, report: pub }, 201);
 }
@@ -123,15 +133,32 @@ export async function handleConfirmReport(request, env) {
   if (await env.EWS_KV.get(marker)) return json({ ok: true, already: true });
   try {
     await env.EWS_KV.put(`cf:${ck}`, String(rl + 1), { expirationTtl: 3600 });
-  } catch {}
-  const report = JSON.parse(raw);
+  } catch (err) {
+    logSwallowed("kv:put confirm rate-limit counter", err);
+  }
+  let report;
+  try {
+    report = JSON.parse(raw);
+  } catch (err) {
+    console.error(`[rb] corrupt report ${id}: ${errText(err)}`);
+    return json({ error: "corrupt record" }, 500);
+  }
   if (report.ck === ck) return json({ ok: true, own: true }); // no self-confirm
   report.confirms += 1;
   if (report.confirms >= 3) report.status = "community-confirmed";
-  await env.EWS_KV.put(id, JSON.stringify(report), { expirationTtl: 60 * 60 * 24 * 180 });
+  // Same rule as creating: an unwritten confirmation must not be reported as
+  // counted — the app locks the button on a 200.
+  try {
+    await env.EWS_KV.put(id, JSON.stringify(report), { expirationTtl: 60 * 60 * 24 * 180 });
+  } catch (err) {
+    console.error(`[rb] confirm store failed for ${id}: ${errText(err)}`);
+    return json({ error: "storage unavailable" }, 503);
+  }
   try {
     await env.EWS_KV.put(marker, "1", { expirationTtl: 60 * 60 * 24 * 30 });
-  } catch {} // marker is best-effort — worst case a re-confirm later
+  } catch (err) {
+    logSwallowed("kv:put confirm marker", err); // worst case a re-confirm later
+  }
   return json({ ok: true, confirms: report.confirms, status: report.status });
 }
 
@@ -155,21 +182,28 @@ export async function handleFeedback(request, env) {
   const rl = Number((await env.EWS_KV.get(`fbrl:${ck}`)) || 0);
   if (rl >= 3) return json({ error: "rate limit" }, 429);
   const inv = String(10_000_000_000_000 - Date.now()).padStart(14, "0");
-  await env.EWS_KV.put(
-    `fb:${inv}:${Math.random().toString(36).slice(2, 6)}`,
-    JSON.stringify({
-      at: new Date().toISOString(),
-      type,
-      rating,
-      text,
-      version: String(b.version || "").slice(0, 20),
-      lang: ["fr", "ar", "en"].includes(b.lang) ? b.lang : "fr",
-    }),
-    { expirationTtl: 60 * 60 * 24 * 365 }
-  );
+  try {
+    await env.EWS_KV.put(
+      `fb:${inv}:${Math.random().toString(36).slice(2, 6)}`,
+      JSON.stringify({
+        at: new Date().toISOString(),
+        type,
+        rating,
+        text,
+        version: String(b.version || "").slice(0, 20),
+        lang: ["fr", "ar", "en"].includes(b.lang) ? b.lang : "fr",
+      }),
+      { expirationTtl: 60 * 60 * 24 * 365 }
+    );
+  } catch (err) {
+    console.error(`[rb] feedback store failed: ${errText(err)}`);
+    return json({ error: "storage unavailable" }, 503);
+  }
   try {
     await env.EWS_KV.put(`fbrl:${ck}`, String(rl + 1), { expirationTtl: 3600 });
-  } catch {}
+  } catch (err) {
+    logSwallowed("kv:put feedback rate-limit counter", err);
+  }
   return json({ ok: true }, 201);
 }
 
@@ -185,7 +219,8 @@ async function listReports(env, limit, { includeHidden = false } = {}) {
     try {
       const { ck: _omit, ...rest } = JSON.parse(raw);
       pub = rest;
-    } catch {
+    } catch (err) {
+      logSwallowed(`report parse ${k.name}`, err);
       continue;
     }
     if (!includeHidden && HIDDEN.has(pub.status)) continue;
