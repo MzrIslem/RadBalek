@@ -15,15 +15,14 @@
 // plain server-rendered <table>. robots.txt permits it.
 
 import { htmlToText } from "./xml.js";
-import { WILAYAS, normFr } from "./wilayas.js";
+import { WILAYAS, normFr, wilayaRef } from "./wilayas.js";
+import { fetchText, UA } from "./http.js";
 
 const LIST_URL = "https://www.craag.dz/index.php/derniers-seismes/";
-const UA = "Mozilla/5.0 (compatible; radbalek/0.2)";
 
 export async function fetchCraag(fetchFn = fetch) {
-  const res = await fetchFn(LIST_URL, { headers: { "user-agent": UA } });
-  if (!res.ok) throw new Error(`CRAAG HTTP ${res.status}`);
-  const html = await res.text();
+  // craag.dz rejects a non-browser user agent.
+  const html = await fetchText(LIST_URL, { fetchFn, label: "CRAAG", ua: UA.browser });
   const rows = parseCraag(html);
   // A 200 page with zero parsed rows means the markup drifted — surface it in
   // errors[] instead of silently losing official attribution forever.
@@ -72,7 +71,7 @@ export function wilayaFromRegion(region) {
       if (!best || n.length > normFr(best.fr).length) best = w;
     }
   }
-  return best ? { code: best.code, fr: best.fr, ar: best.ar } : null;
+  return wilayaRef(best);
 }
 
 /// Attach official CRAAG confirmation to EMSC/USGS quakes.

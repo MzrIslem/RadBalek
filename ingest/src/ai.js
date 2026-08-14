@@ -1,10 +1,10 @@
 // Gemini via Google AI Studio, server-side (no App Check / Play Integrity
 // dependency — works on every install). Key: env.GEMINI_API_KEY.
-import { corsHeaders } from "./reports.js";
+import { json, readJson } from "./http.js";
+import { rateLimit } from "./kv.js";
 
 const MODEL = "gemini-flash-lite-latest"; // ~1s vs ~16s for flash-latest
-const json = (o, s = 200) =>
-  new Response(JSON.stringify(o), { status: s, headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }) });
+const CAP_PER_HOUR = 40; // per IP, across both AI endpoints
 
 export async function geminiGenerate(env, { system, contents, maxTokens = 400, temperature = 0.4, noThinking = false, model = MODEL }) {
   const cfg = { temperature, maxOutputTokens: maxTokens };
@@ -23,15 +23,14 @@ export async function geminiGenerate(env, { system, contents, maxTokens = 400, t
   return (j.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
 }
 
-async function rateOk(env, request, cap = 40) {
+/// Shared gate for both AI endpoints: paid upstream, so an unauthenticated
+/// caller must not be able to burn the quota. Returns null when allowed,
+/// otherwise the response to send back.
+async function aiGate(env, request) {
+  if (!env.GEMINI_API_KEY) return json({ error: "ai disabled" }, 503);
   const ip = request.headers.get("cf-connecting-ip") || "0";
-  const key = `air:${ip}`;
-  const n = Number((await env.EWS_KV.get(key)) || 0);
-  if (n >= cap) return false;
-  try {
-    await env.EWS_KV.put(key, String(n + 1), { expirationTtl: 3600 });
-  } catch {} // counter is best-effort — don't kill the AI on write quota
-  return true;
+  if (!(await rateLimit(env, `air:${ip}`, CAP_PER_HOUR))) return json({ error: "rate limit" }, 429);
+  return null;
 }
 
 const LANG_NAME = {
@@ -42,14 +41,10 @@ const LANG_NAME = {
 
 // POST /v1/ai/chat  { messages:[{role,text}], lang, context }
 export async function handleChat(request, env) {
-  if (!env.GEMINI_API_KEY) return json({ error: "ai disabled" }, 503);
-  if (!(await rateOk(env, request))) return json({ error: "rate limit" }, 429);
-  let b;
-  try {
-    b = await request.json();
-  } catch {
-    return json({ error: "bad json" }, 400);
-  }
+  const blocked = await aiGate(env, request);
+  if (blocked) return blocked;
+  const b = await readJson(request);
+  if (!b) return json({ error: "bad json" }, 400);
   const lang = ["fr", "ar", "en"].includes(b.lang) ? b.lang : "fr";
   const system =
     `You are the assistant of Rad Balek (رد بالك), an early-warning app for Algeria covering heatwaves, ` +
@@ -72,14 +67,10 @@ export async function handleChat(request, env) {
 
 // POST /v1/ai/category  { text }  -> one category word
 export async function handleCategory(request, env) {
-  if (!env.GEMINI_API_KEY) return json({ error: "ai disabled" }, 503);
-  if (!(await rateOk(env, request))) return json({ error: "rate limit" }, 429);
-  let b;
-  try {
-    b = await request.json();
-  } catch {
-    return json({ error: "bad json" }, 400);
-  }
+  const blocked = await aiGate(env, request);
+  if (blocked) return blocked;
+  const b = await readJson(request);
+  if (!b) return json({ error: "bad json" }, 400);
   const text = String(b.text || "").slice(0, 280);
   if (text.trim().length < 4) return json({ category: null });
   try {

@@ -11,8 +11,9 @@
 import { runPipeline } from "./src/pipeline.js";
 import { sendPush } from "./src/push.js";
 import geo from "./data/wilayas.json"; // bundled + parsed at build time by esbuild
+import { corsHeaders, fetchOk, json, jsonRaw, UA } from "./src/http.js";
+import { invStamp, kvGet, kvJson, kvPut, safeJson } from "./src/kv.js";
 import {
-  corsHeaders,
   handleWilayasList,
   handleCreateReport,
   handleConfirmReport,
@@ -91,7 +92,7 @@ export default {
     };
 
     if (path === "/v1/alerts.json") {
-      let body = await env.EWS_KV.get("latest");
+      let body = await kvGet(env, "latest");
       if (!body) {
         try {
           const snap = await refresh(env);
@@ -106,12 +107,7 @@ export default {
       const gen = /"generatedAt":"([^"]+)"/.exec(body);
       if (gen) ctx.waitUntil(watchStale(env, gen[1]));
       if (url.searchParams.get("lite")) body = liteSnapshot(body);
-      return store(new Response(body, {
-        headers: corsHeaders({
-          "content-type": "application/json; charset=utf-8",
-          "cache-control": "public, max-age=120",
-        }),
-      }));
+      return store(jsonRaw(body, 200, { "cache-control": "public, max-age=120" }));
     }
 
     if (path === "/v1/reports" && req.method === "POST") {
@@ -131,22 +127,12 @@ export default {
     // Force an immediate pipeline collect (no push — pushes stay cron-only so
     // concurrent invocations can never race the dedupe map and double-send).
     if (path === "/v1/admin/refresh" && req.method === "POST") {
-      if (!(await adminAuthed(req, url, env)))
-        return new Response(JSON.stringify({ error: "forbidden" }), {
-          status: 403,
-          headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }),
-        });
+      if (!(await adminAuthed(req, url, env))) return json({ error: "forbidden" }, 403);
       try {
         const snap = await refresh(env);
-        return new Response(
-          JSON.stringify({ ok: true, generatedAt: snap.generatedAt, byColor: snap.stats.byColor, errors: snap.errors.length }),
-          { headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }) }
-        );
+        return json({ ok: true, generatedAt: snap.generatedAt, byColor: snap.stats.byColor, errors: snap.errors.length });
       } catch (err) {
-        return new Response(JSON.stringify({ error: String(err && err.message) }), {
-          status: 500,
-          headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }),
-        });
+        return json({ error: String(err && err.message) }, 500);
       }
     }
     if (path === "/v1/test-push" && req.method === "POST") return handleTestPush(req, env, ctx);
@@ -168,21 +154,23 @@ export default {
         const b = new Uint8Array(buf, 0, 8);
         return b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
       };
-      let img = await env.EWS_KV.get(kvKey, "arrayBuffer");
+      let img = await kvGet(env, kvKey, "arrayBuffer");
       if (!isPng(img)) {
-        const r = await fetch(
-          `https://maps.effis.emergency.copernicus.eu/effis?service=WMS&version=1.1.1&request=GetMap` +
-            `&layers=${layer}&styles=default${burnt ? "" : `&time=${day}`}` +
-            `&srs=EPSG:4326&bbox=-8.7,18.9,12.0,37.3&width=1024&height=910&format=image/png&transparent=true`,
-          { headers: { "user-agent": "radbalek/0.2 (+ews Algeria)", accept: "image/png,*/*" } }
-        );
-        if (!r.ok) return new Response("effis " + r.status, { status: 502, headers: corsHeaders() });
-        const buf = await r.arrayBuffer();
+        let buf;
+        try {
+          const r = await fetchOk(
+            `https://maps.effis.emergency.copernicus.eu/effis?service=WMS&version=1.1.1&request=GetMap` +
+              `&layers=${layer}&styles=default${burnt ? "" : `&time=${day}`}` +
+              `&srs=EPSG:4326&bbox=-8.7,18.9,12.0,37.3&width=1024&height=910&format=image/png&transparent=true`,
+            { label: "effis", ua: UA.api, accept: "image/png,*/*" }
+          );
+          buf = await r.arrayBuffer();
+        } catch (err) {
+          return new Response(String(err.message), { status: 502, headers: corsHeaders() });
+        }
         if (!isPng(buf)) return new Response("effis: non-image response", { status: 502, headers: corsHeaders() });
         img = buf;
-        try {
-          await env.EWS_KV.put(kvKey, img, { expirationTtl: 86400 });
-        } catch {}
+        await kvPut(env, kvKey, img, { expirationTtl: 86400 });
       }
       return new Response(img, {
         headers: corsHeaders({ "content-type": "image/png", "cache-control": "public, max-age=10800" }),
@@ -192,10 +180,7 @@ export default {
     if (path === "/v1/ai/category" && req.method === "POST") return handleCategory(req, env);
     if (path === "/v1/weather.json") return store(await handleWeather(env, geo));
     if (path === "/v1/wilayas.json") return handleWilayasList();
-    if (path === "/v1/boundaries.json")
-      return new Response(JSON.stringify(geo), {
-        headers: corsHeaders({ "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=86400" }),
-      });
+    if (path === "/v1/boundaries.json") return json(geo, 200, { "cache-control": "public, max-age=86400" });
     // In-app update check: normalizes the latest GitHub release. Publishing a
     // release on GitHub is the ONLY step — every app learns about it within
     // ~30 min (edge cache) with zero server-side bookkeeping.
@@ -204,10 +189,8 @@ export default {
       // fetches, and /releases/latest skips pre-releases anyway). Updated at
       // release time with one command:
       //   npx wrangler kv key put "app:latest" '{"version":...}' --namespace-id=<EWS_KV> --remote
-      const raw = await env.EWS_KV.get("app:latest");
-      return store(new Response(raw || "{}", {
-        headers: corsHeaders({ "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=900" }),
-      }));
+      const raw = await kvGet(env, "app:latest");
+      return store(jsonRaw(raw || "{}", 200, { "cache-control": "public, max-age=900" }));
     }
     // App feedback (bugs / ideas / reviews about the app itself — distinct
     // from hazard reports). Private to the admin page, not a public feed.
@@ -217,28 +200,24 @@ export default {
     if (path === "/v1/reports.csv") return store(await handleExportCsv(env));
 
     if (path === "/v1/push-status.json") {
-      const raw = (await env.EWS_KV.get("push:last")) || '{"neverRan":true}';
-      return new Response(raw, {
-        headers: corsHeaders({ "content-type": "application/json; charset=utf-8", "cache-control": "no-store" }),
-      });
+      const raw = (await kvGet(env, "push:last")) || '{"neverRan":true}';
+      return jsonRaw(raw, 200, { "cache-control": "no-store" });
     }
 
     if (path === "/v1/history.json") {
       // Single rolled-up doc (1 get) — the old list+168-gets fan-out remains
       // only as a one-time fallback until the first hourly cron after deploy.
-      let body = await env.EWS_KV.get("history:doc");
+      let body = await kvGet(env, "history:doc");
       if (!body) {
         const listed = await env.EWS_KV.list({ prefix: "s:", limit: 168 });
         const out = [];
         for (const k of listed.keys) {
-          const raw = await env.EWS_KV.get(k.name);
-          if (raw) out.push(JSON.parse(raw));
+          const entry = await kvJson(env, k.name);
+          if (entry) out.push(entry);
         }
         body = JSON.stringify(out);
       }
-      return store(new Response(body, {
-        headers: corsHeaders({ "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=300" }),
-      }));
+      return store(jsonRaw(body, 200, { "cache-control": "public, max-age=300" }));
     }
 
     return new Response("Rad Balek (رد بالك) ingest — /v1/alerts.json /v1/reports.json /v1/history.json", {
@@ -258,10 +237,7 @@ async function reconcileFires(env, snap) {
     const fires = (snap.incidents || []).filter((i) => i.source === "firms");
     // One read serves both paths (the write-on-change comparison needed it
     // anyway) — this costs no extra KV reads over the previous version.
-    let cached = null;
-    try {
-      cached = JSON.parse((await env.EWS_KV.get("firms:last")) || "null");
-    } catch {}
+    const cached = await kvJson(env, "firms:last");
     const cacheUsable =
       cached &&
       Array.isArray(cached.fires) &&
@@ -283,11 +259,9 @@ async function reconcileFires(env, snap) {
       // the unconditional put burned 144 KV writes/day (14% of the whole 1k
       // budget) re-storing data that changes ~4x/day. `at` is excluded from the
       // comparison (it changes every cycle by design).
-      try {
-        const body = JSON.stringify(fires);
-        const prev = cached ? JSON.stringify(cached.fires ?? null) : null;
-        if (body !== prev) await env.EWS_KV.put("firms:last", JSON.stringify({ at: snap.generatedAt, fires }));
-      } catch {}
+      const body = JSON.stringify(fires);
+      const prev = cached ? JSON.stringify(cached.fires ?? null) : null;
+      if (body !== prev) await kvPut(env, "firms:last", JSON.stringify({ at: snap.generatedAt, fires }));
       return;
     }
     if (!cacheUsable) return;
@@ -312,9 +286,7 @@ async function refresh(env, doPush = false) {
   // Best-effort: when the daily KV write quota is exhausted this put throws
   // 429 — that must never kill the push path below (2026-07-19 outage: the
   // whole cron died here for 3h and no alerts went out).
-  try {
-    await env.EWS_KV.put("latest", JSON.stringify(snap));
-  } catch {}
+  await kvPut(env, "latest", JSON.stringify(snap));
   if (!doPush) return snap;
 
   const now = new Date(snap.generatedAt);
@@ -328,15 +300,11 @@ async function refresh(env, doPush = false) {
     const pushSummary = await sendPush(env, snap.notifications, snap.alerts, snap.errors, snap.stats.onmEntries);
     const eventful = pushSummary.sent || pushSummary.heartbeats || pushSummary.allclear || (pushSummary.errors || []).length;
     if (eventful || now.getUTCMinutes() < 10) {
-      try {
-        await env.EWS_KV.put("push:last", JSON.stringify({ at: snap.generatedAt, ...pushSummary }));
-      } catch {}
+      await kvPut(env, "push:last", JSON.stringify({ at: snap.generatedAt, ...pushSummary }));
     }
     await watchPipeline(env, snap, pushSummary);
   } catch (err) {
-    try {
-      await env.EWS_KV.put("push:last", JSON.stringify({ at: snap.generatedAt, fatal: String(err.message) }));
-    } catch {}
+    await kvPut(env, "push:last", JSON.stringify({ at: snap.generatedAt, fatal: String(err.message) }));
     await watchPipeline(env, snap, { fatal: String(err.message) });
   }
 
@@ -346,17 +314,12 @@ async function refresh(env, doPush = false) {
   // snap.generatedAt, not wall-clock, so the hourly gate is unchanged.
   try {
     if (now.getUTCMinutes() < 10) {
-      const inv = String(10_000_000_000_000 - now.getTime()).padStart(14, "0");
       const entry = { at: snap.generatedAt, stats: snap.stats, reds: snap.alerts.filter((a) => a.color === "red").map((a) => ({ hazard: a.hazard, wilayas: a.wilayas.map((w) => w.code) })) };
-      try {
-        await env.EWS_KV.put(`s:${inv}`, JSON.stringify(entry), { expirationTtl: 60 * 60 * 24 * 365 });
-      } catch {}
+      await kvPut(env, `s:${invStamp(now.getTime())}`, JSON.stringify(entry), { expirationTtl: 60 * 60 * 24 * 365 });
       // Rolled-up 7-day doc so /v1/history.json costs 1 get, not list+168 gets.
-      try {
-        const doc = JSON.parse((await env.EWS_KV.get("history:doc")) || "[]");
-        if (!doc.length || doc[0].at !== entry.at) doc.unshift(entry);
-        await env.EWS_KV.put("history:doc", JSON.stringify(doc.slice(0, 168)), { expirationTtl: 60 * 60 * 24 * 30 });
-      } catch {}
+      const doc = safeJson(await kvGet(env, "history:doc"), []);
+      if (!doc.length || doc[0].at !== entry.at) doc.unshift(entry);
+      await kvPut(env, "history:doc", JSON.stringify(doc.slice(0, 168)), { expirationTtl: 60 * 60 * 24 * 30 });
     }
   } catch {}
   return snap;

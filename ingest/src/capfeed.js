@@ -3,7 +3,9 @@
 // License: CC BY 4.0, attribution "Office National de la Météorologie".
 
 import { blocks, tag, attr } from "./xml.js";
-import { wilayaByFr } from "./wilayas.js";
+import { wilayaByFr, wilayaRef } from "./wilayas.js";
+import { fetchText, UA } from "./http.js";
+import { matchRule } from "./rules.js";
 
 export const ONM_FEED_URL = "https://ametvigilance.meteo.dz/rss/rss_meteo_dz.xml";
 
@@ -17,16 +19,17 @@ const EVENT_HAZARD = [
 ];
 
 export function hazardFromEvent(event) {
-  for (const [re, h] of EVENT_HAZARD) if (re.test(event)) return h;
-  return "other";
+  return matchRule(EVENT_HAZARD, event, "other");
 }
 
 export async function fetchOnmAlerts(fetchFn = fetch) {
-  const res = await fetchFn(ONM_FEED_URL, {
-    headers: { accept: "application/xml,text/xml,*/*", "user-agent": "aisx-ews/0.1 (+ingest)" },
+  const xml = await fetchText(ONM_FEED_URL, {
+    fetchFn,
+    label: "ONM feed",
+    ua: UA.ingest,
+    accept: "application/xml,text/xml,*/*",
   });
-  if (!res.ok) throw new Error(`ONM feed HTTP ${res.status}`);
-  return parseOnmFeed(await res.text());
+  return parseOnmFeed(xml);
 }
 
 export function parseOnmFeed(xml) {
@@ -52,7 +55,7 @@ export function parseOnmFeed(xml) {
       onset: tag(e, "cap:onset"),
       expires: tag(e, "cap:expires"),
       areaDesc,
-      wilaya: wilaya ? { code: wilaya.code, fr: wilaya.fr, ar: wilaya.ar } : null,
+      wilaya: wilayaRef(wilaya),
       capUrl: attr(e, "link", "href"),
     });
   }

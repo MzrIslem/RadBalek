@@ -11,6 +11,7 @@ import { fetchFirmsHotspots, significantHotspots } from "./firms.js";
 import { fetchQuakes } from "./quakes.js";
 import { makeWilayaResolver, clusterHotspots, inFlareZone } from "./geo.js";
 import { normalizeOnm, normalizeFireCluster, normalizeDgpcIncident, fcmTopicsFor } from "./normalize.js";
+import { wilayaRef } from "./wilayas.js";
 
 export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, fetchFn = fetch, now = () => new Date() } = {}) {
   const errors = [];
@@ -126,7 +127,7 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
         certainty: "Observed",
         onset: new Date(qT0).toISOString(),
         expires: new Date(qT0 + 6 * 3600 * 1000).toISOString(),
-        wilayas: [{ code: w.code, fr: w.fr, ar: w.ar }],
+        wilayas: [wilayaRef(w)],
         lat: q.lat,
         lon: q.lon,
         headline: {
@@ -153,7 +154,7 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
       // Official Algerian confirmation, when CRAAG has caught up (days later).
       craagMag: q.craag ? q.craag.mag : undefined,
       craagRegion: q.craag ? q.craag.region : undefined,
-      wilayas: place ? [{ code: place.code, fr: place.fr, ar: place.ar }] : [],
+      wilayas: place ? [wilayaRef(place)] : [],
       headline: {
         fr: `Séisme M${q.mag} — ${place ? place.fr : q.place || "Algérie"}`,
         en: `Earthquake M${q.mag} — ${place ? place.fr : q.place || "Algeria"}`,

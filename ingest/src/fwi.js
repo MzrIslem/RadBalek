@@ -14,6 +14,7 @@
 // FFMC/DMC/DC are CUMULATIVE: each day's value depends on the previous day's.
 // We spin them up over a run of past days from standard startup values, which
 // is why weather.js requests past_days.
+import { bandOf } from "./rules.js";
 
 // Day-length factors (46°N standard table, Jan..Dec). EFFIS applies the same
 // standard table across Europe including the Mediterranean.
@@ -117,14 +118,10 @@ export function fwiStep({ t, h, w, p, month }, prev = FWI_STARTUP) {
 // EFFIS danger classes — the PUBLISHED boundaries, so "très élevé" means the
 // same thing here as on the European fire-danger map.
 // https://forest-fire.emergency.copernicus.eu/about-effis/technical-background/fire-danger-forecast
+const FWI_BANDS = [[11.2, "low"], [21.3, "moderate"], [38.0, "high"], [50.0, "veryHigh"], [70.0, "extreme"]];
+
 export function fwiClass(fwi) {
-  if (!Number.isFinite(fwi)) return null;
-  if (fwi < 11.2) return "low";
-  if (fwi < 21.3) return "moderate";
-  if (fwi < 38.0) return "high";
-  if (fwi < 50.0) return "veryHigh";
-  if (fwi < 70.0) return "extreme";
-  return "veryExtreme";
+  return bandOf(FWI_BANDS, fwi, "veryExtreme");
 }
 
 /// Run the cumulative codes across a series of daily observations and return

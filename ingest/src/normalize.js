@@ -5,6 +5,8 @@
 //   incidents -> observations (FIRMS satellite, DGPC Telegram) : map pins,
 //                silent by default, promoted only by curation rules.
 
+import { wilayaRef } from "./wilayas.js";
+
 const SEVERITY_COLOR = { Moderate: "yellow", Severe: "orange", Extreme: "red" }; // ONM ladder 1/2/3
 
 const HAZARD_LABELS = {
@@ -61,7 +63,7 @@ export function normalizeOnm(onmAlert) {
 }
 
 export function normalizeFireCluster(cluster, wilayaProps, { corroborated = false, possibleIndustrial = false } = {}) {
-  const w = wilayaProps ? { code: wilayaProps.code, fr: wilayaProps.fr, ar: wilayaProps.ar } : null;
+  const w = wilayaRef(wilayaProps);
   const where = { fr: w ? w.fr : "Algérie", ar: w ? `ولاية ${w.ar}` : "الجزائر" };
   return {
     corroborated, // DGPC reports ongoing fires in the same wilaya

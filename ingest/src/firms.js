@@ -2,6 +2,8 @@
 // Free MAP_KEY: https://firms.modaps.eosdis.nasa.gov/api/map_key/
 // Quota: 5000 transactions / 10 min. NRT latency for Algeria ~1-3h per overpass.
 
+import { fetchText, UA } from "./http.js";
+
 const DZ_BBOX = "-8.7,18.9,12.0,37.3"; // west,south,east,north
 
 export const FIRMS_SOURCES = ["VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT", "MODIS_NRT"];
@@ -34,12 +36,14 @@ export async function fetchFirmsHotspots(
       // Per-source abort: FIRMS NRT can hang 15-25s on one sensor. Bounding each
       // fetch means one slow satellite can't drag the whole parallel batch past
       // the pipeline budget — the sensors that answer in time still deliver.
-      const res = await fetchFn(url, {
-        headers: { "user-agent": "aisx-ews/0.1 (+ingest)", accept: "text/csv,*/*" },
-        signal: AbortSignal.timeout(18000),
+      const csv = await fetchText(url, {
+        fetchFn,
+        label: `FIRMS ${src}`,
+        ua: UA.ingest,
+        accept: "text/csv,*/*",
+        timeoutMs: 18000,
       });
-      if (!res.ok) throw new Error(`FIRMS ${src} HTTP ${res.status}`);
-      return parseFirmsCsv(await res.text(), src);
+      return parseFirmsCsv(csv, src);
     })
   );
   const all = [];

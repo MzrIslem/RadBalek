@@ -11,6 +11,8 @@
 
 import { blocks, tag, htmlToText } from "./xml.js";
 import { wilayasInFrenchText } from "./wilayas.js";
+import { fetchText, UA } from "./http.js";
+import { matchRule } from "./rules.js";
 
 // Verified live 2026-07-20. Topic feeds first (high signal-to-noise), then the
 // general feeds which we filter by keyword.
@@ -21,7 +23,6 @@ export const FEEDS = [
   { url: "https://www.ennaharonline.com/category/algeria/feed/", name: "Ennahar", topic: null },
 ];
 
-const UA = "Mozilla/5.0 (compatible; radbalek/0.2)";
 const MAX_AGE_MS = 24 * 3600 * 1000;
 
 export async function fetchNews(fetchFn = fetch, feeds = FEEDS) {
@@ -34,9 +35,12 @@ export async function fetchNews(fetchFn = fetch, feeds = FEEDS) {
 }
 
 async function fetchFeed(fetchFn, feed) {
-  const res = await fetchFn(feed.url, { headers: { "user-agent": UA, accept: "application/rss+xml,*/*" } });
-  if (!res.ok) throw new Error(`${feed.name} HTTP ${res.status}`);
-  const xml = await res.text();
+  const xml = await fetchText(feed.url, {
+    fetchFn,
+    label: feed.name,
+    ua: UA.browser,
+    accept: "application/rss+xml,*/*",
+  });
   const out = [];
   for (const item of blocks(xml, "item")) {
     const title = htmlToText(tag(item, "title") || "");
@@ -82,7 +86,6 @@ const HAZARD_RULES = [
 ];
 
 function hazardOf(title) {
-  for (const [re, h] of HAZARD_RULES) if (re.test(title)) return h;
-  return null;
+  return matchRule(HAZARD_RULES, title);
 }
 

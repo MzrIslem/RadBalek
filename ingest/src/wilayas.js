@@ -108,6 +108,13 @@ export function wilayaByCode(code) {
   return WILAYAS.find((w) => w.code === code) || null;
 }
 
+/// The public shape of a wilaya reference: the three fields the app and every
+/// JSON payload expect, WITHOUT the internal matching aliases (extraFr, geometry).
+/// Projecting anything else leaks index data into the API surface.
+export function wilayaRef(w) {
+  return w ? { code: w.code, fr: w.fr, ar: w.ar } : null;
+}
+
 /// Accent-folded lowercase that KEEPS word separators — unlike normFr(), which
 /// strips everything to bare letters and makes substring matching unsafe
 /// ("Alger" lives inside "Algérie", which pinned a visa article to the capital).
@@ -131,7 +138,7 @@ export function wilayasInFrenchText(text, { max = 4 } = {}) {
       const needle = foldFr(name);
       if (needle.length < 4) continue; // too short to be unambiguous
       if (hay.includes(` ${needle} `)) {
-        found.set(w.code, { code: w.code, fr: w.fr, ar: w.ar });
+        found.set(w.code, wilayaRef(w));
         break;
       }
     }
