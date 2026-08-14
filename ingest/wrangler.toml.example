@@ -13,6 +13,10 @@ binding = "EWS_KV"
 id = "YOUR_KV_NAMESPACE_ID"
 
 # Secrets are NOT stored here. Set them with `npx wrangler secret put NAME`:
+#   ADMIN_KEY        — /admin dashboard + /v1/admin/* (long random string; sent
+#                      as `Authorization: Bearer <key>`, never in the query)
 #   FIREBASE_SA      — Firebase service-account JSON (push)
 #   FIRMS_MAP_KEY    — NASA FIRMS key (satellite fires)
 #   GEMINI_API_KEY   — optional, AI assistant + report triage
+#   REPORT_SALT      — optional, salts the per-reporter pseudonym so the hash
+#                      cannot be brute-forced back to a reporter's IP

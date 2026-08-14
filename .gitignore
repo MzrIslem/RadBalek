@@ -34,6 +34,10 @@ build/
 # Contains the real KV namespace id — use wrangler.toml.example as the template
 ingest/wrangler.toml
 
+# Full-repo git bundles: a backup blob carries whatever was local when it was
+# made (including the ignored files above), and .gitignore cannot see inside it.
+*.bundle
+
 # Internal design/ops notes kept local, not published
 docs/thermal-sensing.md
 docs/PLAYSTORE.md

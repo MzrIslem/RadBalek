@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../app_state.dart';
+import '../links.dart';
 import '../models.dart';
 import '../regions.dart';
 import '../strings.dart';
@@ -229,7 +230,7 @@ class HomeScreen extends StatelessWidget {
               style: TextStyle(fontSize: 12, color: cs.onPrimaryContainer.withValues(alpha: .8))),
         ),
         FilledButton(
-          onPressed: url == null ? null : () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+          onPressed: url == null ? null : () => openWebLink(url),
           style: FilledButton.styleFrom(
             backgroundColor: cs.primary, foregroundColor: cs.onPrimary,
             padding: const EdgeInsets.symmetric(horizontal: 14), visualDensity: VisualDensity.compact),

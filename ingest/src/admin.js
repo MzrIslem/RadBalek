@@ -1,6 +1,7 @@
-// Curator + utility endpoints.
-//   GET  /v1/admin/reports?key=K          newest 100 reports (all statuses)
-//   POST /v1/admin/moderate {key,id,status} status: verified | rejected
+// Curator + utility endpoints. All of them authenticate with
+// `Authorization: Bearer <ADMIN_KEY>` — never a query parameter.
+//   GET  /v1/admin/reports                newest 100 reports (all statuses)
+//   POST /v1/admin/moderate {id,status}   status: verified | rejected
 //   GET  /v1/admin/overview               mission control: snapshot age, sources, push, config
 //   POST /v1/admin/app-latest             publish the in-app update banner (KV app:latest)
 //   POST /v1/test-push {token}            self-test notification to one device
@@ -9,30 +10,60 @@
 // asynchronously and FAIL-OPEN. In a safety feed the dangerous error is
 // suppressing a real report, so anything the AI is unsure about stays visible;
 // only "spam"/"rejected" are hidden. Human /admin moderation is the final word.
-import { corsHeaders } from "./reports.js";
+import { corsHeaders, jsonObject } from "./reports.js";
 import { getAccessToken } from "./push.js";
 import { geminiGenerate } from "./ai.js";
 
+// Authed answers are for the curator's own browser only: no CORS grant (so no
+// other origin can read them), and never cached anywhere.
 const json = (o, s = 200) =>
+  new Response(JSON.stringify(o), {
+    status: s,
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "referrer-policy": "no-referrer" },
+  });
+
+// /v1/test-push is the app's own (unauthenticated) self-test, so it keeps the
+// public CORS answer.
+const jsonPublic = (o, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }) });
 
-// Audit fix: the admin key used to ride the URL query, where it leaks into
-// logs, browser history and referrers, with unlimited guesses. Now preferred
-// via Authorization: Bearer (query kept one release for compatibility), and
-// FAILED attempts are rate-limited per IP (10/h) — successful auths cost no
-// KV write.
-function adminKeyOf(request, url) {
+// The admin key travels in Authorization: Bearer ONLY. A query parameter leaks
+// into Cloudflare logs, browser history and the Referer header of every
+// outbound link, so ?key= is not accepted.
+function adminKeyOf(request) {
   const m = (request.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i);
-  return (m ? m[1] : url.searchParams.get("key")) || "";
+  return m ? m[1] : "";
 }
 
+async function sha256(s) {
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
+}
+
+async function sha256Hex(s) {
+  return [...(await sha256(s))].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Compares the SHA-256 digests, not the strings: `===` on strings
+// short-circuits at the first differing byte, so its runtime leaks how much of
+// the key a guess got right. Digests are fixed-length and independent of the
+// input's prefix, so the fold below reveals nothing.
+async function sameSecret(a, b) {
+  const [x, y] = await Promise.all([sha256(a), sha256(b)]);
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
+
+// FAILED attempts are rate-limited per IP (10/h) — successful auths cost no
+// KV write.
 export async function adminAuthed(request, url, env) {
   if (!env.ADMIN_KEY) return false;
   const ip = request.headers.get("cf-connecting-ip") || "0";
   const rlKey = `adminrl:${ip}`;
   const fails = Number((await env.EWS_KV.get(rlKey)) || 0);
   if (fails >= 10) return false;
-  if (adminKeyOf(request, url) === env.ADMIN_KEY) return true;
+  const key = adminKeyOf(request);
+  if (key && (await sameSecret(key, env.ADMIN_KEY))) return true;
   try {
     await env.EWS_KV.put(rlKey, String(fails + 1), { expirationTtl: 3600 });
   } catch {}
@@ -61,16 +92,16 @@ export async function handleModerate(request, url, env) {
   // re-implement the key check inline, with NO failed-attempt lockout — giving
   // unlimited unthrottled guesses at ADMIN_KEY, and on success the ability to
   // mark genuine hazard reports "rejected" (hidden from the public feed).
-  // adminAuthed reads Authorization: Bearer first and falls back to ?key=.
+  // adminAuthed requires the key in Authorization: Bearer.
   if (!(await adminAuthed(request, url, env))) return json({ error: "forbidden" }, 403);
-  let b;
-  try {
-    b = await request.json();
-  } catch {
-    return json({ error: "invalid json" }, 400);
-  }
+  const b = await jsonObject(request);
+  if (!b) return json({ error: "invalid json" }, 400);
   if (!["verified", "rejected"].includes(b.status)) return json({ error: "bad status" }, 400);
-  const raw = await env.EWS_KV.get(String(b.id || ""));
+  const id = String(b.id || "");
+  // Report keys only: any other KV name (e.g. "latest") would be re-written
+  // with a status field and a 180-day TTL, i.e. the snapshot destroyed.
+  if (!/^r:\d{14}:[a-z0-9]+$/.test(id)) return json({ error: "bad id" }, 400);
+  const raw = await env.EWS_KV.get(id);
   if (!raw) return json({ error: "not found" }, 404);
   const report = JSON.parse(raw);
   report.status = b.status;
@@ -129,20 +160,15 @@ export async function handleAdminOverview(request, url, env) {
 // within ~15 min of clicking Publier.
 export async function handleAdminAppLatest(request, url, env) {
   if (!(await adminAuthed(request, url, env))) return json({ error: "forbidden" }, 403);
-  let b;
-  try {
-    b = await request.json();
-  } catch {
-    return json({ error: "invalid json" }, 400);
-  }
+  const b = await jsonObject(request);
+  if (!b) return json({ error: "invalid json" }, 400);
   const version = String(b.version || "").trim();
   if (!/^\d+\.\d+\.\d+$/.test(version)) return json({ error: "version must be x.y.z" }, 400);
-  const https = (s) => /^https:\/\/\S+$/.test(s);
   const tag = String(b.tag || "v" + version).trim().slice(0, 60);
   const page = String(b.url || "").trim();
   const apk = String(b.apk || "").trim();
-  if (page && !https(page)) return json({ error: "url must be https" }, 400);
-  if (apk && !https(apk)) return json({ error: "apk must be https" }, 400);
+  if (page && !releaseLink(page)) return json({ error: "url must look like " + RELEASE_ORIGINS_HINT }, 400);
+  if (apk && !releaseLink(apk)) return json({ error: "apk must look like " + RELEASE_ORIGINS_HINT }, 400);
   const doc = {
     version,
     tag,
@@ -153,6 +179,30 @@ export async function handleAdminAppLatest(request, url, env) {
   };
   await env.EWS_KV.put("app:latest", JSON.stringify(doc));
   return json({ ok: true, appLatest: doc });
+}
+
+// The app opens whatever `apk`/`url` this endpoint publishes, so those links
+// are an install path, not just navigation: "any https URL" would let one
+// leaked ADMIN_KEY point every device at an attacker-built APK. Releases live
+// on this repo's GitHub release pages (github.com serves the download and
+// redirects to objects.githubusercontent.com), so nothing else is publishable.
+const RELEASE_ORIGINS = [
+  { host: "github.com", prefix: "/MzrIslem/RadBalek/" },
+  { host: "objects.githubusercontent.com", prefix: "/" },
+];
+export const RELEASE_ORIGINS_HINT = "https://github.com/MzrIslem/RadBalek/releases/...";
+
+export function releaseLink(link) {
+  let u;
+  try {
+    u = new URL(link);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== "https:") return false;
+  // Exact host match: a suffix test would accept github.com.evil.example. The
+  // path prefix keeps a compromised key from pointing at another repo's assets.
+  return RELEASE_ORIGINS.some((o) => u.hostname.toLowerCase() === o.host && u.pathname.startsWith(o.prefix));
 }
 
 const CATS = ["fire", "smoke", "road", "flood", "animal", "heat", "other"];
@@ -216,24 +266,29 @@ export async function triageReport(env, pub) {
 }
 
 export async function handleTestPush(request, env, ctx) {
-  let b;
-  try {
-    b = await request.json();
-  } catch {
-    return json({ error: "invalid json" }, 400);
-  }
+  const b = await jsonObject(request);
+  if (!b) return jsonPublic({ error: "invalid json" }, 400);
   const token = String(b.token || "");
-  if (token.length < 50 || token.length > 400) return json({ error: "bad token" }, 400);
-  if (!env.FIREBASE_SA) return json({ error: "push disabled" }, 503);
+  if (!/^[A-Za-z0-9_:.-]{50,400}$/.test(token)) return jsonPublic({ error: "bad token" }, 400);
+  if (!env.FIREBASE_SA) return jsonPublic({ error: "push disabled" }, 503);
+  // Two counters. Per-IP caps how much of the Firebase quota one caller can
+  // burn; per-TOKEN caps how often a given handset can be made to scream —
+  // without it, an attacker holding someone's FCM token just rotates IPs and
+  // fires the forced-alarm-volume siren at that phone all night.
   const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
   const rlKey = `tp:${ip}`;
-  const n = Number((await env.EWS_KV.get(rlKey)) || 0);
-  if (n >= 12) return json({ error: "rate limit" }, 429);
+  const tokKey = `tpt:${await sha256Hex(token)}`;
+  const [n, tn] = await Promise.all([env.EWS_KV.get(rlKey), env.EWS_KV.get(tokKey)]);
+  if (Number(n || 0) >= 12) return jsonPublic({ error: "rate limit" }, 429);
+  if (Number(tn || 0) >= 6) return jsonPublic({ error: "rate limit" }, 429);
   const sa = JSON.parse(env.FIREBASE_SA);
   const at = await getAccessToken(sa, env);
   try {
-    await env.EWS_KV.put(rlKey, String(n + 1), { expirationTtl: 3600 });
-  } catch {} // counter is best-effort
+    await Promise.all([
+      env.EWS_KV.put(rlKey, String(Number(n || 0) + 1), { expirationTtl: 3600 }),
+      env.EWS_KV.put(tokKey, String(Number(tn || 0) + 1), { expirationTtl: 3600 }),
+    ]);
+  } catch {} // counters are best-effort
   // Delayed 8s: foreground FCM is silent on Android (no channel sound), so the
   // user must have time to LOCK THE SCREEN — then the siren rides the real
   // background path, which is exactly what a real red alert uses.
@@ -262,7 +317,7 @@ export async function handleTestPush(request, env, ctx) {
   };
   if (ctx) ctx.waitUntil(send());
   else await send();
-  return json({ ok: true, delayed: 8 });
+  return jsonPublic({ ok: true, delayed: 8 });
 }
 
 // ?lite=1 projection of the snapshot: ~4x smaller for mobile-data users.
