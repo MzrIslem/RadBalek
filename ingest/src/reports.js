@@ -10,18 +10,18 @@
 //   GET  /v1/reports.csv            full export for analysis
 //   GET  /v1/wilayas.json           the 58 wilayas (code, fr, ar)
 
-import { WILAYAS, wilayaByCode } from "./wilayas.js";
+import { WILAYAS, wilayaByCode, wilayaRef } from "./wilayas.js";
 import { makeWilayaResolver } from "./geo.js";
+import { corsHeaders, json, readJson } from "./http.js";
+import { bumpCounter, counter, invStamp, kvGet, kvPut, randomSuffix, safeJson } from "./kv.js";
 
 export const CATEGORIES = ["fire", "smoke", "road", "flood", "animal", "heat", "other"];
 const MAX_PER_HOUR = 10; // AI moderation + community-confirm handle bad content
 const SALT = "radbalek-v1";
-
-// Newest-first lexicographic key: inverse epoch millis, zero-padded.
-function reportKey(now, rand) {
-  const inv = String(10_000_000_000_000 - now.getTime()).padStart(14, "0");
-  return `r:${inv}:${rand}`;
-}
+// Reports and their confirm markers outlive a season so trends stay queryable.
+export const REPORT_TTL_S = 60 * 60 * 24 * 180;
+const MARKER_TTL_S = 60 * 60 * 24 * 30;
+const FEEDBACK_TTL_S = 60 * 60 * 24 * 365;
 
 async function clientKey(request) {
   const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
@@ -29,40 +29,20 @@ async function clientKey(request) {
   return [...new Uint8Array(buf.slice(0, 8))].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function corsHeaders(extra = {}) {
-  return {
-    "access-control-allow-origin": "*",
-    "access-control-allow-methods": "GET,POST,OPTIONS",
-    "access-control-allow-headers": "content-type",
-    ...extra,
-  };
-}
-
-const json = (obj, status = 200, extra = {}) =>
-  new Response(JSON.stringify(obj), {
-    status,
-    headers: corsHeaders({ "content-type": "application/json; charset=utf-8", ...extra }),
-  });
-
 export async function handleWilayasList() {
-  return json(WILAYAS.map((w) => ({ code: w.code, fr: w.fr, ar: w.ar })), 200, {
+  return json(WILAYAS.map(wilayaRef), 200, {
     "cache-control": "public, max-age=86400",
   });
 }
 
 export async function handleCreateReport(request, env, wilayasGeojson, now = new Date()) {
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return json({ error: "invalid json" }, 400);
-  }
+  const body = await readJson(request);
+  if (!body) return json({ error: "invalid json" }, 400);
   const category = String(body.category || "");
   if (!CATEGORIES.includes(category)) return json({ error: "bad category" }, 400);
 
   const ck = await clientKey(request);
-  const rl = Number((await env.EWS_KV.get(`rl:${ck}`)) || 0);
-  if (rl >= MAX_PER_HOUR) return json({ error: "rate limit" }, 429);
+  if ((await counter(env, `rl:${ck}`)) >= MAX_PER_HOUR) return json({ error: "rate limit" }, 429);
 
   let wilaya = null;
   // Number(null) === 0, so null must be rejected before coercion.
@@ -83,7 +63,7 @@ export async function handleCreateReport(request, env, wilayasGeojson, now = new
   if (!wilaya && lat === null) return json({ error: "need wilaya or position" }, 400);
 
   const report = {
-    id: reportKey(now, Math.random().toString(36).slice(2, 6)),
+    id: `r:${invStamp(now.getTime())}:${randomSuffix()}`,
     at: now.toISOString(),
     category,
     wilaya,
@@ -95,43 +75,35 @@ export async function handleCreateReport(request, env, wilayasGeojson, now = new
     confirms: 0,
     ck,
   };
-  await env.EWS_KV.put(report.id, JSON.stringify(report), { expirationTtl: 60 * 60 * 24 * 180 });
-  try {
-    await env.EWS_KV.put(`rl:${ck}`, String(rl + 1), { expirationTtl: 3600 });
-  } catch {} // counter is best-effort — the report is already stored
+  // The report write itself is NOT best-effort: if it fails the caller must
+  // learn its report was lost, so this one is deliberately unguarded.
+  await env.EWS_KV.put(report.id, JSON.stringify(report), { expirationTtl: REPORT_TTL_S });
+  await bumpCounter(env, `rl:${ck}`); // best-effort — the report is already stored
   const { ck: _omit, ...pub } = report;
   return json({ ok: true, report: pub }, 201);
 }
 
 export async function handleConfirmReport(request, env) {
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return json({ error: "invalid json" }, 400);
-  }
+  const body = await readJson(request);
+  if (!body) return json({ error: "invalid json" }, 400);
   const id = String(body.id || "");
   if (!/^r:\d{14}:[a-z0-9]+$/.test(id)) return json({ error: "bad id" }, 400);
-  const raw = await env.EWS_KV.get(id);
+  const raw = await kvGet(env, id);
   if (!raw) return json({ error: "not found" }, 404);
   const ck = await clientKey(request);
   // Rate limit: confirm was the ONLY public POST without one — each call costs
   // 2 KV writes (quota abuse) and inflates the community-trust signal.
-  const rl = Number((await env.EWS_KV.get(`cf:${ck}`)) || 0);
-  if (rl >= 20) return json({ error: "rate limit" }, 429);
+  if ((await counter(env, `cf:${ck}`)) >= 20) return json({ error: "rate limit" }, 429);
   const marker = `rc:${id}:${ck}`;
-  if (await env.EWS_KV.get(marker)) return json({ ok: true, already: true });
-  try {
-    await env.EWS_KV.put(`cf:${ck}`, String(rl + 1), { expirationTtl: 3600 });
-  } catch {}
-  const report = JSON.parse(raw);
+  if (await kvGet(env, marker)) return json({ ok: true, already: true });
+  await bumpCounter(env, `cf:${ck}`);
+  const report = safeJson(raw);
+  if (!report) return json({ error: "not found" }, 404);
   if (report.ck === ck) return json({ ok: true, own: true }); // no self-confirm
   report.confirms += 1;
   if (report.confirms >= 3) report.status = "community-confirmed";
-  await env.EWS_KV.put(id, JSON.stringify(report), { expirationTtl: 60 * 60 * 24 * 180 });
-  try {
-    await env.EWS_KV.put(marker, "1", { expirationTtl: 60 * 60 * 24 * 30 });
-  } catch {} // marker is best-effort — worst case a re-confirm later
+  await env.EWS_KV.put(id, JSON.stringify(report), { expirationTtl: REPORT_TTL_S });
+  await kvPut(env, marker, "1", { expirationTtl: MARKER_TTL_S }); // worst case a re-confirm later
   return json({ ok: true, confirms: report.confirms, status: report.status });
 }
 
@@ -141,22 +113,16 @@ const HIDDEN = new Set(["spam", "rejected"]);
 // POST /v1/feedback {type: bug|idea|comment, rating?: 1-5, text, version?, lang?}
 // App feedback for the dev team (admin page only — never a public feed).
 export async function handleFeedback(request, env) {
-  let b;
-  try {
-    b = await request.json();
-  } catch {
-    return json({ error: "invalid json" }, 400);
-  }
+  const b = await readJson(request);
+  if (!b) return json({ error: "invalid json" }, 400);
   const type = ["bug", "idea", "comment"].includes(b.type) ? b.type : "comment";
   const text = String(b.text || "").slice(0, 600).replace(/[<>]/g, "").trim();
   const rating = Number.isInteger(b.rating) && b.rating >= 1 && b.rating <= 5 ? b.rating : null;
   if (!text && !rating) return json({ error: "empty" }, 400);
   const ck = await clientKey(request);
-  const rl = Number((await env.EWS_KV.get(`fbrl:${ck}`)) || 0);
-  if (rl >= 3) return json({ error: "rate limit" }, 429);
-  const inv = String(10_000_000_000_000 - Date.now()).padStart(14, "0");
+  if ((await counter(env, `fbrl:${ck}`)) >= 3) return json({ error: "rate limit" }, 429);
   await env.EWS_KV.put(
-    `fb:${inv}:${Math.random().toString(36).slice(2, 6)}`,
+    `fb:${invStamp()}:${randomSuffix()}`,
     JSON.stringify({
       at: new Date().toISOString(),
       type,
@@ -165,11 +131,9 @@ export async function handleFeedback(request, env) {
       version: String(b.version || "").slice(0, 20),
       lang: ["fr", "ar", "en"].includes(b.lang) ? b.lang : "fr",
     }),
-    { expirationTtl: 60 * 60 * 24 * 365 }
+    { expirationTtl: FEEDBACK_TTL_S }
   );
-  try {
-    await env.EWS_KV.put(`fbrl:${ck}`, String(rl + 1), { expirationTtl: 3600 });
-  } catch {}
+  await bumpCounter(env, `fbrl:${ck}`);
   return json({ ok: true }, 201);
 }
 
@@ -177,17 +141,11 @@ async function listReports(env, limit, { includeHidden = false } = {}) {
   const listed = await env.EWS_KV.list({ prefix: "r:", limit });
   const out = [];
   for (const k of listed.keys) {
-    const raw = await env.EWS_KV.get(k.name);
-    if (!raw) continue;
     // One malformed value must drop ONE report, not 500 the whole public feed
     // (and store() won't cache a 500, so every request would re-run the fan-out).
-    let pub;
-    try {
-      const { ck: _omit, ...rest } = JSON.parse(raw);
-      pub = rest;
-    } catch {
-      continue;
-    }
+    const stored = safeJson(await kvGet(env, k.name));
+    if (!stored) continue;
+    const { ck: _omit, ...pub } = stored;
     if (!includeHidden && HIDDEN.has(pub.status)) continue;
     out.push(pub);
   }

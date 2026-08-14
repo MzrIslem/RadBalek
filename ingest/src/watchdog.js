@@ -10,47 +10,35 @@
 //
 // Both are rate-limited to one push per hour per kind — the KV free tier meters
 // writes (1k/day), and a flapping source must not become a write storm.
-import { getAccessToken } from "./push.js";
+import { fcmSender, serviceAccount } from "./fcm.js";
+import { kvGet, kvPut } from "./kv.js";
 
 const ADMIN_TOPIC = "admin";
 const COOLDOWN_S = 3600;
 const STALE_MS = 35 * 60 * 1000; // cron is every 10 min — 35 means it missed 3
 
 async function notifyAdmin(env, kind, title, body) {
-  if (!env.FIREBASE_SA) return false;
+  const sa = serviceAccount(env);
+  if (!sa) return false;
   const flag = `wd:${kind}`;
+  if (await kvGet(env, flag)) return false; // already alerted this hour
   try {
-    if (await env.EWS_KV.get(flag)) return false; // already alerted this hour
+    await fcmSender(env, sa)({
+      topic: ADMIN_TOPIC,
+      notification: { title, body: String(body).slice(0, 200) },
+      // Audible but NOT the red siren — a backend outage is urgent for the
+      // maintainer, it is not a civil emergency.
+      android: { priority: "HIGH", notification: { channel_id: "orange_s2" } },
+      data: { kind: "admin", watchdog: String(kind) },
+    });
   } catch {
+    // Don't claim success (and don't burn the 1h cooldown) on a failed send —
+    // that suppressed the retry for an hour while reporting delivered. Never
+    // let the watchdog break the cron either.
     return false;
   }
-  try {
-    const sa = JSON.parse(env.FIREBASE_SA);
-    const at = await getAccessToken(sa, env);
-    const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${at}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        message: {
-          topic: ADMIN_TOPIC,
-          notification: { title, body: String(body).slice(0, 200) },
-          // Audible but NOT the red siren — a backend outage is urgent for the
-          // maintainer, it is not a civil emergency.
-          android: { priority: "HIGH", notification: { channel_id: "orange_s2" } },
-          data: { kind: "admin", watchdog: String(kind) },
-        },
-      }),
-    });
-    // Don't claim success (and don't burn the 1h cooldown) on a failed send —
-    // that suppressed the retry for an hour while reporting delivered.
-    if (!res.ok) return false;
-    try {
-      await env.EWS_KV.put(flag, "1", { expirationTtl: COOLDOWN_S });
-    } catch {} // cooldown is best-effort; worst case one extra push
-    return true;
-  } catch {
-    return false; // never let the watchdog break the cron
-  }
+  await kvPut(env, flag, "1", { expirationTtl: COOLDOWN_S }); // worst case one extra push
+  return true;
 }
 
 // (1) Degradation — called at the end of each cron run.

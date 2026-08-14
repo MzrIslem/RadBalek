@@ -1,7 +1,7 @@
 // Direct emergency FCM to a device token (from devtoken.txt) — proves the
 // full delivery path + emergency channel. node send-to-token.mjs
 import { readFileSync } from "node:fs";
-import { getAccessToken } from "../src/push.js";
+import { getAccessToken } from "../src/fcm.js";
 
 const sa = JSON.parse(readFileSync(new URL("../../firebase-sa.json", import.meta.url), "utf8"));
 const token = readFileSync(new URL("../../devtoken.txt", import.meta.url), "utf8").trim();

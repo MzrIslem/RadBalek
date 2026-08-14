@@ -2,6 +2,18 @@
 // request over wilaya centroids, cached 30 min in KV. Serves /v1/weather.json
 // for the app's map layers: temperature, wind speed, humidity, feels-like.
 import { fwiSeries } from "./fwi.js";
+import { fetchOk, json, jsonRaw, UA } from "./http.js";
+import { kvGet, kvPut } from "./kv.js";
+import { bandOf } from "./rules.js";
+
+// European AQI bands (published, inclusive upper bounds) → our colour tiers.
+const AQ_BANDS = [[20, "good"], [40, "fair"], [60, "moderate"], [80, "poor"]];
+// Feels-like °C → heat risk, the scale the app's colour legend is built on.
+const HEAT_BANDS = [[35, "low"], [40, "moderate"], [45, "high"]];
+
+// Public cache window; the KV copy lives 30 min, the edge copy 5.
+const PUBLIC_CACHE = "public, max-age=300";
+const KV_TTL_S = 1800;
 
 // FFMC/DMC/DC are cumulative, so the index needs a run-up before it means
 // anything. 14 days from the standard startup values is enough for FFMC and
@@ -9,11 +21,8 @@ import { fwiSeries } from "./fwi.js";
 const FWI_SPINUP_DAYS = 14;
 
 export async function handleWeather(env, geo) {
-  const cached = await env.EWS_KV.get("weather");
-  if (cached)
-    return new Response(cached, {
-      headers: { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*", "cache-control": "public, max-age=300" },
-    });
+  const cached = await kvGet(env, "weather");
+  if (cached) return jsonRaw(cached, 200, { "cache-control": PUBLIC_CACHE });
 
   const cents = [];
   for (const f of geo.features) {
@@ -42,30 +51,30 @@ export async function handleWeather(env, geo) {
   const aqUrl =
     `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lats}&longitude=${lons}` +
     `&current=european_aqi,pm2_5,pm10&timezone=UTC`;
-  const [res, aqRes] = await Promise.all([
-    fetch(url, { headers: { "user-agent": "radbalek/0.1" } }),
-    fetch(aqUrl, { headers: { "user-agent": "radbalek/0.1" } }).catch(() => null),
+  const [weatherRes, aqRes] = await Promise.all([
+    fetchOk(url, { label: "weather", ua: UA.api }).catch(() => null),
+    // Air quality is enrichment — never fail weather over it.
+    fetchOk(aqUrl, { label: "air-quality", ua: UA.api }).catch(() => null),
   ]);
-  if (!res.ok) return new Response('{"error":"upstream"}', { status: 502, headers: { "access-control-allow-origin": "*" } });
+  if (!weatherRes) return json({ error: "upstream" }, 502);
   let data;
   try {
-    data = await res.json();
+    data = await weatherRes.json();
   } catch {
-    return new Response('{"error":"upstream body"}', { status: 502, headers: { "access-control-allow-origin": "*" } });
+    return json({ error: "upstream body" }, 502);
   }
   const arr = Array.isArray(data) ? data : [data];
   let aqArr = [];
   try {
-    if (aqRes && aqRes.ok) {
+    if (aqRes) {
       const aq = await aqRes.json();
       aqArr = Array.isArray(aq) ? aq : [aq];
     }
   } catch {} // air quality is enrichment — never fail weather over it
-  // European AQI bands → our color tiers.
-  const aqBand = (v) => (v == null ? null : v <= 20 ? "good" : v <= 40 ? "fair" : v <= 60 ? "moderate" : v <= 80 ? "poor" : "veryPoor");
+  const aqBand = (v) => (v == null ? null : bandOf(AQ_BANDS, v, "veryPoor", { inclusive: true }));
   // Rule-based 48h trend (no ML): compare today's feels-like max to the peak
   // of the next two days; classify heat risk from that peak.
-  const riskOf = (feels) => (feels == null ? null : feels >= 45 ? "extreme" : feels >= 40 ? "high" : feels >= 35 ? "moderate" : "low");
+  const riskOf = (feels) => (feels == null ? null : bandOf(HEAT_BANDS, feels, "extreme"));
   const out = {
     at: new Date().toISOString(),
     source: "Open-Meteo.com",
@@ -124,13 +133,9 @@ export async function handleWeather(env, geo) {
     }),
   };
   const body = JSON.stringify(out);
-  // Guarded: an unguarded put threw on a quota 429 and made /v1/weather.json
-  // return 500 for the rest of the day — killing the heat-risk layer during
-  // exactly the heat emergency that consumed the quota.
-  try {
-    await env.EWS_KV.put("weather", body, { expirationTtl: 1800 });
-  } catch {}
-  return new Response(body, {
-    headers: { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*", "cache-control": "public, max-age=300" },
-  });
+  // Best-effort: an unguarded put threw on a quota 429 and made
+  // /v1/weather.json return 500 for the rest of the day — killing the heat-risk
+  // layer during exactly the heat emergency that consumed the quota.
+  await kvPut(env, "weather", body, { expirationTtl: KV_TTL_S });
+  return jsonRaw(body, 200, { "cache-control": PUBLIC_CACHE });
 }

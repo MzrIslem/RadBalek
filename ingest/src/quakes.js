@@ -1,5 +1,7 @@
 // Earthquakes over Algeria, last 14 days, M>=3.
 // EMSC primary (faster/denser for the Mediterranean), USGS fallback. Both free.
+import { fetchJson, fetchOk } from "./http.js";
+
 const BOX = "minlatitude=18.9&maxlatitude=37.5&minlongitude=-8.7&maxlongitude=12&minmagnitude=3";
 
 export async function fetchQuakes(fetchFn = fetch) {
@@ -12,12 +14,11 @@ export async function fetchQuakes(fetchFn = fetch) {
 }
 
 async function fromEmsc(fetchFn, start) {
-  const res = await fetchFn(
+  const res = await fetchOk(
     `https://www.seismicportal.eu/fdsnws/event/1/query?format=json&starttime=${start}&${BOX}&limit=100`,
-    { headers: { "user-agent": "radbalek/0.2" } }
+    { fetchFn, label: "EMSC" }
   );
   if (res.status === 204) return []; // EMSC: no content = no events
-  if (!res.ok) throw new Error(`EMSC HTTP ${res.status}`);
   const j = await res.json();
   return (j.features || []).map((f) => ({
     id: `emsc:${f.id}`,
@@ -31,12 +32,10 @@ async function fromEmsc(fetchFn, start) {
 }
 
 async function fromUsgs(fetchFn, start) {
-  const res = await fetchFn(
+  const j = await fetchJson(
     `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${start}&${BOX}&orderby=time`,
-    { headers: { "user-agent": "radbalek/0.2" } }
+    { fetchFn, label: "USGS" }
   );
-  if (!res.ok) throw new Error(`USGS HTTP ${res.status}`);
-  const j = await res.json();
   return (j.features || []).map((f) => ({
     id: `usgs:${f.id}`,
     mag: f.properties.mag,

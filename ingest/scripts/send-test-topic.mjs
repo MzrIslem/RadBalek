@@ -1,7 +1,7 @@
 // Direct high-priority FCM to a topic (bypasses worker dedupe) to prove
 // end-to-end delivery on the device. node send-test-topic.mjs w16_heat_red
 import { readFileSync } from "node:fs";
-import { getAccessToken } from "../src/push.js";
+import { getAccessToken } from "../src/fcm.js";
 
 const topic = process.argv[2] || "w16_heat_red";
 const sa = JSON.parse(readFileSync(new URL("../../firebase-sa.json", import.meta.url), "utf8"));

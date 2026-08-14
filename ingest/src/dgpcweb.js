@@ -7,9 +7,9 @@
 // fails. A browser-like UA is required (verified).
 
 import { htmlToText, blocks, tag } from "./xml.js";
-import { wilayasInFrenchText, wilayaInArabicText } from "./wilayas.js";
-
-const UA = "Mozilla/5.0 (compatible; radbalek/0.2; +https://github.com/rad-balek)";
+import { wilayasInFrenchText, wilayaInArabicText, wilayaRef } from "./wilayas.js";
+import { fetchJson, fetchText, UA } from "./http.js";
+import { matchRule } from "./rules.js";
 
 /// Recent posts from the official Protection Civile site.
 /// dgpc.dz sits behind Cloudflare and intermittently returns 522 (origin
@@ -24,9 +24,7 @@ export async function fetchDgpcWeb(fetchFn = fetch, { sinceHours = 48, limit = 2
   let lastErr;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await fetchFn(url, { headers: { "user-agent": UA, accept: "application/json" } });
-      if (!res.ok) throw new Error(`dgpc.dz HTTP ${res.status}`);
-      const rows = await res.json();
+      const rows = await fetchJson(url, { fetchFn, label: "dgpc.dz", ua: UA.browser, accept: "application/json" });
       if (!Array.isArray(rows)) throw new Error("dgpc.dz: unexpected payload");
       return rows.map(normalizePost).filter(Boolean);
     } catch (e) {
@@ -42,11 +40,12 @@ export async function fetchDgpcWeb(fetchFn = fetch, { sinceHours = 48, limit = 2
 
 /// RSS fallback — same content, no JSON API dependency.
 async function fetchDgpcRss(fetchFn, sinceHours) {
-  const res = await fetchFn("https://dgpc.dz/feed/", {
-    headers: { "user-agent": UA, accept: "application/rss+xml,*/*" },
+  const xml = await fetchText("https://dgpc.dz/feed/", {
+    fetchFn,
+    label: "dgpc.dz/feed",
+    ua: UA.browser,
+    accept: "application/rss+xml,*/*",
   });
-  if (!res.ok) throw new Error(`dgpc.dz/feed HTTP ${res.status}`);
-  const xml = await res.text();
   const cutoff = Date.now() - sinceHours * 3600 * 1000;
   const out = [];
   for (const item of blocks(xml, "item")) {
@@ -108,8 +107,7 @@ const RULES = [
 ];
 
 function classify(text) {
-  for (const [re, kind] of RULES) if (re.test(text)) return kind;
-  return "other";
+  return matchRule(RULES, text, "other");
 }
 
 /// Wilaya extraction: word-boundary French matching (the site writes "wilaya
@@ -118,6 +116,6 @@ function matchWilayas(text) {
   const found = new Map();
   for (const w of wilayasInFrenchText(text, { max: 6 })) found.set(w.code, w);
   const ar = wilayaInArabicText(text);
-  if (ar) found.set(ar.code, { code: ar.code, fr: ar.fr, ar: ar.ar });
+  if (ar) found.set(ar.code, wilayaRef(ar));
   return [...found.values()].slice(0, 6);
 }

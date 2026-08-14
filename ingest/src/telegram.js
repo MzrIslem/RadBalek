@@ -5,7 +5,8 @@
 // (optionally refined by an LLM later in the pipeline).
 
 import { htmlToText, attr } from "./xml.js";
-import { wilayaInArabicText } from "./wilayas.js";
+import { wilayaInArabicText, wilayaRef } from "./wilayas.js";
+import { matchRule } from "./rules.js";
 
 export const DGPC_CHANNEL = "DGPCDZ";
 
@@ -15,6 +16,8 @@ export const DGPC_CHANNEL = "DGPCDZ";
 export const CHANNELS = ["DGPCDZ"];
 
 async function fetchOne(fetchFn, channel) {
+  // redirect:manual so a 302 stays visible: t.me redirects private/nonexistent
+  // channels to a landing page that would otherwise parse as "0 posts".
   const res = await fetchFn(`https://t.me/s/${channel}`, {
     headers: { "user-agent": "Mozilla/5.0 (compatible; aisx-ews/0.1)" },
     redirect: "manual",
@@ -57,16 +60,9 @@ const KIND_RULES = [
 ];
 
 function classifyPost(post) {
-  let kind = "other";
-  for (const [re, k] of KIND_RULES)
-    if (re.test(post.text)) {
-      kind = k;
-      break;
-    }
+  const kind = matchRule(KIND_RULES, post.text, "other");
   const out = { ...post, kind, wilaya: null, incidents: [], stats: null };
-
-  const w = wilayaInArabicText(post.text);
-  if (w) out.wilaya = { code: w.code, fr: w.fr, ar: w.ar };
+  out.wilaya = wilayaRef(wilayaInArabicText(post.text));
 
   if (kind === "fire-sitrep") {
     const parsed = parseFireSitrep(post.text);
@@ -103,8 +99,8 @@ export function parseFireSitrep(text) {
 
     const wm = line.match(/ولاية\s+(.+)/);
     if (wm) {
-      const w = wilayaInArabicText(wm[0]);
-      if (w) wilaya = { code: w.code, fr: w.fr, ar: w.ar };
+      const w = wilayaRef(wilayaInArabicText(wm[0]));
+      if (w) wilaya = w;
       continue;
     }
     if (line.startsWith("*")) {

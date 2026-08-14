@@ -4,7 +4,7 @@
 //   3. sends a test notification to topic "debug_all"
 // Run: node scripts/test-push.js
 import { readFileSync } from "node:fs";
-import { getAccessToken } from "../src/push.js";
+import { getAccessToken } from "../src/fcm.js";
 
 const saPath = new URL("../../firebase-sa.json", import.meta.url);
 let sa;

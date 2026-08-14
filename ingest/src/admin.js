@@ -9,12 +9,11 @@
 // asynchronously and FAIL-OPEN. In a safety feed the dangerous error is
 // suppressing a real report, so anything the AI is unsure about stays visible;
 // only "spam"/"rejected" are hidden. Human /admin moderation is the final word.
-import { corsHeaders } from "./reports.js";
-import { getAccessToken } from "./push.js";
+import { REPORT_TTL_S } from "./reports.js";
+import { fcmSender, serviceAccount } from "./fcm.js";
 import { geminiGenerate } from "./ai.js";
-
-const json = (o, s = 200) =>
-  new Response(JSON.stringify(o), { status: s, headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }) });
+import { json, readJson } from "./http.js";
+import { bumpCounter, counter, kvJson, kvPut, rateLimit } from "./kv.js";
 
 // Audit fix: the admin key used to ride the URL query, where it leaks into
 // logs, browser history and referrers, with unlimited guesses. Now preferred
@@ -30,12 +29,9 @@ export async function adminAuthed(request, url, env) {
   if (!env.ADMIN_KEY) return false;
   const ip = request.headers.get("cf-connecting-ip") || "0";
   const rlKey = `adminrl:${ip}`;
-  const fails = Number((await env.EWS_KV.get(rlKey)) || 0);
-  if (fails >= 10) return false;
+  if ((await counter(env, rlKey)) >= 10) return false;
   if (adminKeyOf(request, url) === env.ADMIN_KEY) return true;
-  try {
-    await env.EWS_KV.put(rlKey, String(fails + 1), { expirationTtl: 3600 });
-  } catch {}
+  await bumpCounter(env, rlKey); // only FAILED attempts cost a write
   return false;
 }
 
@@ -46,12 +42,10 @@ export async function handleAdminList(request, url, env) {
   const listed = await env.EWS_KV.list({ prefix, limit: 100 });
   const out = [];
   for (const k of listed.keys) {
-    const raw = await env.EWS_KV.get(k.name);
-    if (raw) {
-      const item = JSON.parse(raw);
-      if (!item.id) item.id = k.name; // feedback rows carry no embedded id
-      out.push(item);
-    }
+    const item = await kvJson(env, k.name);
+    if (!item) continue;
+    if (!item.id) item.id = k.name; // feedback rows carry no embedded id
+    out.push(item);
   }
   return json({ count: out.length, reports: out });
 }
@@ -63,18 +57,13 @@ export async function handleModerate(request, url, env) {
   // mark genuine hazard reports "rejected" (hidden from the public feed).
   // adminAuthed reads Authorization: Bearer first and falls back to ?key=.
   if (!(await adminAuthed(request, url, env))) return json({ error: "forbidden" }, 403);
-  let b;
-  try {
-    b = await request.json();
-  } catch {
-    return json({ error: "invalid json" }, 400);
-  }
+  const b = await readJson(request);
+  if (!b) return json({ error: "invalid json" }, 400);
   if (!["verified", "rejected"].includes(b.status)) return json({ error: "bad status" }, 400);
-  const raw = await env.EWS_KV.get(String(b.id || ""));
-  if (!raw) return json({ error: "not found" }, 404);
-  const report = JSON.parse(raw);
+  const report = await kvJson(env, String(b.id || ""));
+  if (!report) return json({ error: "not found" }, 404);
   report.status = b.status;
-  await env.EWS_KV.put(report.id, JSON.stringify(report), { expirationTtl: 60 * 60 * 24 * 180 });
+  await env.EWS_KV.put(report.id, JSON.stringify(report), { expirationTtl: REPORT_TTL_S });
   return json({ ok: true, id: report.id, status: report.status });
 }
 
@@ -84,19 +73,11 @@ export async function handleModerate(request, url, env) {
 // Cost: 3 KV gets, no list — safe to poll every minute from an open dashboard.
 export async function handleAdminOverview(request, url, env) {
   if (!(await adminAuthed(request, url, env))) return json({ error: "forbidden" }, 403);
-  const [latestRaw, pushRaw, appRaw] = await Promise.all([
-    env.EWS_KV.get("latest"),
-    env.EWS_KV.get("push:last"),
-    env.EWS_KV.get("app:latest"),
+  const [snap, push, appLatest] = await Promise.all([
+    kvJson(env, "latest"),
+    kvJson(env, "push:last"),
+    kvJson(env, "app:latest"),
   ]);
-  const parse = (s) => {
-    try {
-      return s ? JSON.parse(s) : null;
-    } catch {
-      return null;
-    }
-  };
-  const snap = parse(latestRaw);
   // Per-source incident counts + freshest observation time.
   const sources = {};
   for (const i of (snap && snap.incidents) || []) {
@@ -117,8 +98,8 @@ export async function handleAdminOverview(request, url, env) {
       expires: a.expires || null,
     })),
     sources,
-    push: parse(pushRaw),
-    appLatest: parse(appRaw),
+    push,
+    appLatest,
     config: { gemini: !!env.GEMINI_API_KEY, push: !!env.FIREBASE_SA, firms: !!env.FIRMS_MAP_KEY },
   });
 }
@@ -129,12 +110,8 @@ export async function handleAdminOverview(request, url, env) {
 // within ~15 min of clicking Publier.
 export async function handleAdminAppLatest(request, url, env) {
   if (!(await adminAuthed(request, url, env))) return json({ error: "forbidden" }, 403);
-  let b;
-  try {
-    b = await request.json();
-  } catch {
-    return json({ error: "invalid json" }, 400);
-  }
+  const b = await readJson(request);
+  if (!b) return json({ error: "invalid json" }, 400);
   const version = String(b.version || "").trim();
   if (!/^\d+\.\d+\.\d+$/.test(version)) return json({ error: "version must be x.y.z" }, 400);
   const https = (s) => /^https:\/\/\S+$/.test(s);
@@ -196,9 +173,8 @@ export async function geminiModerate(env, report) {
 export async function triageReport(env, pub) {
   const m = await geminiModerate(env, pub);
   if (!m) return; // AI unavailable/unsure -> report stays "new" and visible
-  const raw = await env.EWS_KV.get(pub.id);
-  if (!raw) return;
-  const r = JSON.parse(raw);
+  const r = await kvJson(env, pub.id);
+  if (!r) return;
   if (r.status !== "new") return; // don't touch verified/rejected/confirmed
   if (m.verdict === "spam") {
     r.status = "spam"; // hidden from the public feed by listReports()
@@ -210,54 +186,38 @@ export async function triageReport(env, pub) {
       r.category = m.category; // corrected, still fully visible
     }
   }
-  try {
-    await env.EWS_KV.put(r.id, JSON.stringify(r), { expirationTtl: 60 * 60 * 24 * 180 });
-  } catch {} // KV write best-effort — worst case the report stays "new" (visible)
+  // Best-effort — worst case the report stays "new" (visible).
+  await kvPut(env, r.id, JSON.stringify(r), { expirationTtl: REPORT_TTL_S });
 }
 
 export async function handleTestPush(request, env, ctx) {
-  let b;
-  try {
-    b = await request.json();
-  } catch {
-    return json({ error: "invalid json" }, 400);
-  }
+  const b = await readJson(request);
+  if (!b) return json({ error: "invalid json" }, 400);
   const token = String(b.token || "");
   if (token.length < 50 || token.length > 400) return json({ error: "bad token" }, 400);
-  if (!env.FIREBASE_SA) return json({ error: "push disabled" }, 503);
+  const sa = serviceAccount(env);
+  if (!sa) return json({ error: "push disabled" }, 503);
   const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
-  const rlKey = `tp:${ip}`;
-  const n = Number((await env.EWS_KV.get(rlKey)) || 0);
-  if (n >= 12) return json({ error: "rate limit" }, 429);
-  const sa = JSON.parse(env.FIREBASE_SA);
-  const at = await getAccessToken(sa, env);
-  try {
-    await env.EWS_KV.put(rlKey, String(n + 1), { expirationTtl: 3600 });
-  } catch {} // counter is best-effort
+  if (!(await rateLimit(env, `tp:${ip}`, 12))) return json({ error: "rate limit" }, 429);
+  const send1 = fcmSender(env, sa);
   // Delayed 8s: foreground FCM is silent on Android (no channel sound), so the
   // user must have time to LOCK THE SCREEN — then the siren rides the real
   // background path, which is exactly what a real red alert uses.
   const send = async () => {
     await new Promise((r) => setTimeout(r, 8000));
-    await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${at}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        message: {
-          token,
-          // Data-only RED: exercises the exact native siren path a real red
-          // alert uses (forced alarm volume + full-screen + insistent loop).
-          data: {
-            kind: "self-test",
-            color: "red",
-            headline_fr: "🔴 Rad Balek — test ✓",
-            headline_ar: "التنبيهات تعمل — Vos alertes fonctionnent.",
-            alertId: "self-test",
-            hazard: "other",
-          },
-          android: { priority: "HIGH" },
-        },
-      }),
+    await send1({
+      token,
+      // Data-only RED: exercises the exact native siren path a real red
+      // alert uses (forced alarm volume + full-screen + insistent loop).
+      data: {
+        kind: "self-test",
+        color: "red",
+        headline_fr: "🔴 Rad Balek — test ✓",
+        headline_ar: "التنبيهات تعمل — Vos alertes fonctionnent.",
+        alertId: "self-test",
+        hazard: "other",
+      },
+      android: { priority: "HIGH" },
     });
   };
   if (ctx) ctx.waitUntil(send());
@@ -267,6 +227,8 @@ export async function handleTestPush(request, env, ctx) {
 
 // ?lite=1 projection of the snapshot: ~4x smaller for mobile-data users.
 export function liteSnapshot(full) {
+  // Deliberately NOT safeJson: a malformed snapshot must surface as an error,
+  // never as a valid-looking empty feed that hides live alerts.
   const s = JSON.parse(full);
   return JSON.stringify({
     generatedAt: s.generatedAt,

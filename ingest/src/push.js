@@ -8,8 +8,9 @@
 // Dedupe: KV key sent:{alertId} (3-day TTL) so the 10-min cron never re-sends.
 
 import { wilayaByCode } from "./wilayas.js";
+import { fcmSender, serviceAccount } from "./fcm.js";
+import { kvGet, kvPut, safeJson } from "./kv.js";
 
-const SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 // Free-plan Workers allow 50 subrequests/invocation; the pipeline uses ~10.
 // One KV round-trip for the whole dedupe map keeps sends at 1 subrequest each.
 const MAX_SENDS_PER_CYCLE = 30;
@@ -37,51 +38,6 @@ const HB_RECS = {
   other: [["Suivez les consignes des autorités", "اتبع تعليمات السلطات"]],
 };
 
-const b64url = (buf) =>
-  btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-const b64urlJson = (obj) => b64url(new TextEncoder().encode(JSON.stringify(obj)));
-
-function pemToDer(pem) {
-  const b64 = pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out.buffer;
-}
-
-export async function getAccessToken(sa, env) {
-  const cached = env ? await env.EWS_KV.get("fcm_token") : null;
-  if (cached) return cached;
-  const iat = Math.floor(Date.now() / 1000);
-  const unsigned =
-    b64urlJson({ alg: "RS256", typ: "JWT" }) +
-    "." +
-    b64urlJson({ iss: sa.client_email, scope: SCOPE, aud: sa.token_uri, iat, exp: iat + 3600 });
-  const key = await crypto.subtle.importKey(
-    "pkcs8",
-    pemToDer(sa.private_key),
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(unsigned));
-  const jwt = unsigned + "." + b64url(sig);
-  const res = await fetch(sa.token_uri, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: `grant_type=${encodeURIComponent("urn:ietf:params:oauth:grant-type:jwt-bearer")}&assertion=${jwt}`,
-  });
-  if (!res.ok) throw new Error(`token exchange HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const tok = (await res.json()).access_token;
-  // Cache is best-effort: a quota-exhausted put must not block the send.
-  if (env) {
-    try {
-      await env.EWS_KV.put("fcm_token", tok, { expirationTtl: 3300 });
-    } catch {}
-  }
-  return tok;
-}
-
 function messageFor(alert, topic) {
   const color = alert.color;
   const data = {
@@ -105,34 +61,30 @@ function messageFor(alert, topic) {
   // suppression by OEMs (OxygenOS silent mode) made system display unreliable.
   if (color === "red") {
     return {
-      message: {
-        topic,
-        data,
-        android: { priority: "HIGH" },
-        apns: {
-          headers: { "apns-priority": "10" },
-          payload: { aps: { "content-available": 1, sound: "default", "interruption-level": "time-sensitive" } },
-        },
+      topic,
+      data,
+      android: { priority: "HIGH" },
+      apns: {
+        headers: { "apns-priority": "10" },
+        payload: { aps: { "content-available": 1, sound: "default", "interruption-level": "time-sensitive" } },
       },
     };
   }
   return {
-    message: {
-      topic,
-      notification: { title: alert.headline.fr, body: alert.headline.ar },
-      data,
-      android: {
-        priority: "HIGH",
-        notification: {
-          channel_id: "orange_s2",
-          sound: "default",
-          notification_priority: "PRIORITY_HIGH",
-        },
+    topic,
+    notification: { title: alert.headline.fr, body: alert.headline.ar },
+    data,
+    android: {
+      priority: "HIGH",
+      notification: {
+        channel_id: "orange_s2",
+        sound: "default",
+        notification_priority: "PRIORITY_HIGH",
       },
-      apns: {
-        headers: { "apns-priority": "10" },
-        payload: { aps: { sound: "default", "interruption-level": "active" } },
-      },
+    },
+    apns: {
+      headers: { "apns-priority": "10" },
+      payload: { aps: { sound: "default", "interruption-level": "active" } },
     },
   };
 }
@@ -144,25 +96,16 @@ function messageFor(alert, topic) {
 export async function sendPush(env, notifications, alerts, errors = [], onmEntries = 1) {
   const summary = { sent: 0, deduped: 0, yellowSkipped: 0, errors: [] };
   if (!env.FIREBASE_SA) return { ...summary, disabled: true };
-  let sa;
-  try {
-    sa = JSON.parse(env.FIREBASE_SA);
-  } catch {
-    return { ...summary, errors: [{ error: "FIREBASE_SA is not valid JSON" }] };
-  }
+  const sa = serviceAccount(env);
+  if (!sa) return { ...summary, errors: [{ error: "FIREBASE_SA is not valid JSON" }] };
+  const send = fcmSender(env, sa);
   const byId = new Map(alerts.map((a) => [a.id, a]));
   const now = Date.now();
   // Guarded: this is the FIRST statement of the delivery path. An unguarded KV
   // read here threw on a quota 429 and killed every push for the rest of the
   // day. Losing the dedupe map costs a duplicate; losing the cycle costs lives.
-  let sentRaw = "{}";
-  try {
-    sentRaw = (await env.EWS_KV.get("sentmap")) || "{}";
-  } catch {}
-  let sentMap = {};
-  try {
-    sentMap = JSON.parse(sentRaw);
-  } catch {}
+  const sentRaw = (await kvGet(env, "sentmap")) || "{}";
+  const sentMap = safeJson(sentRaw, {});
   for (const k of Object.keys(sentMap)) if (sentMap[k] < now) delete sentMap[k];
 
   // Red-first: a life-critical red must never be starved by orange pushes that
@@ -172,7 +115,6 @@ export async function sendPush(env, notifications, alerts, errors = [], onmEntri
     (a, b) => (byId.get(a.alertId)?.color === "red" ? 0 : 1) - (byId.get(b.alertId)?.color === "red" ? 0 : 1)
   );
 
-  let token = null;
   // Topics actually DELIVERED this cycle (sent now, or deduped because an
   // earlier cycle delivered them). The all-clear diff must use this, not the
   // list of topics we merely intended to send: capped/failed sends were being
@@ -197,21 +139,7 @@ export async function sendPush(env, notifications, alerts, errors = [], onmEntri
       continue;
     }
     try {
-      token = token || (await getAccessToken(sa, env));
-      const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify(messageFor(alert, n.topic)),
-      });
-      // A stale cached OAuth token made every send 401 for up to 55 minutes
-      // (total blackout) because nothing ever invalidated the cache.
-      if (res.status === 401 || res.status === 403) {
-        try {
-          await env.EWS_KV.delete("fcm_token");
-        } catch {}
-        token = null;
-      }
-      if (!res.ok) throw new Error(`FCM HTTP ${res.status}: ${(await res.text()).slice(0, 160)}`);
+      await send(messageFor(alert, n.topic));
       summary.sent++;
       sentMap[sentKey] = now + SENT_TTL_MS;
       delivered.add(n.topic);
@@ -240,23 +168,15 @@ export async function sendPush(env, notifications, alerts, errors = [], onmEntri
       const hbKey = `hb:${topic}:${a.onset}:${slot}`;
       if (sentMap[hbKey]) continue;
       try {
-        token = token || (await getAccessToken(sa, env));
-        const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
-          method: "POST",
-          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-          body: JSON.stringify({
-            message: {
-              topic,
-              notification: {
-                title: `⏰ ${a.headline.fr} — toujours actif`,
-                body: `${recFr} · ${recAr}`,
-              },
-              data: { kind: "heartbeat", alertId: String(a.id), color: "red", hazard: String(a.hazard) },
-              android: { priority: "HIGH", notification: { channel_id: "orange_s2", sound: "default" } },
-            },
-          }),
+        await send({
+          topic,
+          notification: {
+            title: `⏰ ${a.headline.fr} — toujours actif`,
+            body: `${recFr} · ${recAr}`,
+          },
+          data: { kind: "heartbeat", alertId: String(a.id), color: "red", hazard: String(a.hazard) },
+          android: { priority: "HIGH", notification: { channel_id: "orange_s2", sound: "default" } },
         });
-        if (!res.ok) throw new Error(`FCM HTTP ${res.status}`);
         summary.heartbeats++;
         sentMap[hbKey] = now + SENT_TTL_MS;
       } catch (err) {
@@ -269,14 +189,7 @@ export async function sendPush(env, notifications, alerts, errors = [], onmEntri
   // --- all-clear: topics active last cycle but no longer alerting → green ---
   summary.allclear = 0;
   const currentTopics = delivered;
-  let prevRaw = "[]";
-  try {
-    prevRaw = (await env.EWS_KV.get("activetopics")) || "[]";
-  } catch {}
-  let prevTopics = [];
-  try {
-    prevTopics = JSON.parse(prevRaw);
-  } catch {}
+  const prevTopics = safeJson(await kvGet(env, "activetopics"), []);
   // DEGRADED CYCLE: if the ONM fetch failed (or returned nothing), `alerts` is
   // empty for a reason that has nothing to do with hazards ending — every
   // active topic would diff out and get "✅ Fin d'alerte" mid-emergency, and
@@ -308,26 +221,18 @@ export async function sendPush(env, notifications, alerts, errors = [], onmEntri
     const w = wilayaByCode(Number(code));
     const [hFr, hAr] = HAZ[hazard] || HAZ.other;
     try {
-      token = token || (await getAccessToken(sa, env));
-      const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          message: {
-            topic,
-            notification: {
-              title: `✅ Fin d'alerte — ${w ? w.fr : "Algérie"}`,
-              body: `${hFr} terminée · انتهى تحذير ${hAr}`,
-            },
-            data: { kind: "allclear", hazard: String(hazard) },
-            android: { priority: "HIGH", notification: { channel_id: "allclear_s2", sound: "default" } },
-          },
-        }),
+      await send({
+        topic,
+        notification: {
+          title: `✅ Fin d'alerte — ${w ? w.fr : "Algérie"}`,
+          body: `${hFr} terminée · انتهى تحذير ${hAr}`,
+        },
+        data: { kind: "allclear", hazard: String(hazard) },
+        android: { priority: "HIGH", notification: { channel_id: "allclear_s2", sound: "default" } },
       });
-      if (res.ok) summary.allclear++;
-      else carry.add(topic); // retry next cycle instead of losing it silently
+      summary.allclear++;
     } catch (err) {
-      carry.add(topic);
+      carry.add(topic); // retry next cycle instead of losing it silently
       summary.errors.push({ topic, error: "allclear " + String(err.message).slice(0, 100) });
     }
   }
@@ -337,16 +242,13 @@ export async function sendPush(env, notifications, alerts, errors = [], onmEntri
   // cosmetic activetopics write attempted first, so a single quota 429 on it
   // skipped the sentmap put entirely — losing the dedupe map and re-firing the
   // red siren every 10 minutes until the quota reset.
-  try {
-    const sentOut = JSON.stringify(sentMap);
-    if (sentOut !== sentRaw) await env.EWS_KV.put("sentmap", sentOut);
-  } catch {} // dedupe persistence is best-effort — never fail the cycle
+  // Dedupe persistence is best-effort — never fail the cycle.
+  const sentOut = JSON.stringify(sentMap);
+  if (sentOut !== sentRaw) await kvPut(env, "sentmap", sentOut);
   if (!degraded) {
-    try {
-      // .sort() so a reordered ONM batch doesn't trigger a pointless write.
-      const topicsOut = JSON.stringify([...new Set([...currentTopics, ...carry])].sort());
-      if (topicsOut !== JSON.stringify(prevTopics.slice().sort())) await env.EWS_KV.put("activetopics", topicsOut);
-    } catch {}
+    // .sort() so a reordered ONM batch doesn't trigger a pointless write.
+    const topicsOut = JSON.stringify([...new Set([...currentTopics, ...carry])].sort());
+    if (topicsOut !== JSON.stringify(prevTopics.slice().sort())) await kvPut(env, "activetopics", topicsOut);
   }
   return summary;
 }
