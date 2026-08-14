@@ -12,6 +12,7 @@
 import { corsHeaders } from "./reports.js";
 import { getAccessToken } from "./push.js";
 import { geminiGenerate } from "./ai.js";
+import { errText, logSwallowed } from "./log.js";
 
 const json = (o, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }) });
@@ -35,7 +36,11 @@ export async function adminAuthed(request, url, env) {
   if (adminKeyOf(request, url) === env.ADMIN_KEY) return true;
   try {
     await env.EWS_KV.put(rlKey, String(fails + 1), { expirationTtl: 3600 });
-  } catch {}
+  } catch (err) {
+    // The lockout counter is the brute-force defence: if it cannot be written,
+    // failed guesses stop being counted, so say so loudly.
+    console.error(`[rb] admin lockout counter not written: ${errText(err)}`);
+  }
   return false;
 }
 
@@ -47,11 +52,17 @@ export async function handleAdminList(request, url, env) {
   const out = [];
   for (const k of listed.keys) {
     const raw = await env.EWS_KV.get(k.name);
-    if (raw) {
-      const item = JSON.parse(raw);
-      if (!item.id) item.id = k.name; // feedback rows carry no embedded id
-      out.push(item);
+    if (!raw) continue;
+    // One malformed value must drop ONE row, not 500 the whole dashboard.
+    let item;
+    try {
+      item = JSON.parse(raw);
+    } catch (err) {
+      logSwallowed(`admin list parse ${k.name}`, err);
+      continue;
     }
+    if (!item.id) item.id = k.name; // feedback rows carry no embedded id
+    out.push(item);
   }
   return json({ count: out.length, reports: out });
 }
@@ -72,9 +83,22 @@ export async function handleModerate(request, url, env) {
   if (!["verified", "rejected"].includes(b.status)) return json({ error: "bad status" }, 400);
   const raw = await env.EWS_KV.get(String(b.id || ""));
   if (!raw) return json({ error: "not found" }, 404);
-  const report = JSON.parse(raw);
+  let report;
+  try {
+    report = JSON.parse(raw);
+  } catch (err) {
+    console.error(`[rb] corrupt report ${b.id}: ${errText(err)}`);
+    return json({ error: "corrupt record" }, 500);
+  }
   report.status = b.status;
-  await env.EWS_KV.put(report.id, JSON.stringify(report), { expirationTtl: 60 * 60 * 24 * 180 });
+  // A failed write must not answer ok: the curator would believe a report was
+  // hidden (or verified) when it is still live in the public feed.
+  try {
+    await env.EWS_KV.put(report.id, JSON.stringify(report), { expirationTtl: 60 * 60 * 24 * 180 });
+  } catch (err) {
+    console.error(`[rb] moderate write failed for ${report.id}: ${errText(err)}`);
+    return json({ error: "storage unavailable" }, 503);
+  }
   return json({ ok: true, id: report.id, status: report.status });
 }
 
@@ -89,14 +113,15 @@ export async function handleAdminOverview(request, url, env) {
     env.EWS_KV.get("push:last"),
     env.EWS_KV.get("app:latest"),
   ]);
-  const parse = (s) => {
+  const parse = (s, what) => {
     try {
       return s ? JSON.parse(s) : null;
-    } catch {
+    } catch (err) {
+      logSwallowed(`overview parse ${what}`, err);
       return null;
     }
   };
-  const snap = parse(latestRaw);
+  const snap = parse(latestRaw, "latest");
   // Per-source incident counts + freshest observation time.
   const sources = {};
   for (const i of (snap && snap.incidents) || []) {
@@ -117,8 +142,8 @@ export async function handleAdminOverview(request, url, env) {
       expires: a.expires || null,
     })),
     sources,
-    push: parse(pushRaw),
-    appLatest: parse(appRaw),
+    push: parse(pushRaw, "push:last"),
+    appLatest: parse(appRaw, "app:latest"),
     config: { gemini: !!env.GEMINI_API_KEY, push: !!env.FIREBASE_SA, firms: !!env.FIRMS_MAP_KEY },
   });
 }
@@ -151,7 +176,12 @@ export async function handleAdminAppLatest(request, url, env) {
     notes: String(b.notes || "").slice(0, 500) || undefined,
     at: new Date().toISOString(),
   };
-  await env.EWS_KV.put("app:latest", JSON.stringify(doc));
+  try {
+    await env.EWS_KV.put("app:latest", JSON.stringify(doc));
+  } catch (err) {
+    console.error(`[rb] app:latest write failed: ${errText(err)}`);
+    return json({ error: "storage unavailable" }, 503);
+  }
   return json({ ok: true, appLatest: doc });
 }
 
@@ -185,7 +215,10 @@ export async function geminiModerate(env, report) {
     }
     if (s.startsWith("OK")) return { verdict: "ok" };
     return null;
-  } catch {
+  } catch (err) {
+    // Fail-open by design (the report stays visible), but a permanently broken
+    // moderator is invisible otherwise: nothing downstream reports a null.
+    logSwallowed("gemini moderate", err);
     return null;
   }
 }
@@ -198,7 +231,15 @@ export async function triageReport(env, pub) {
   if (!m) return; // AI unavailable/unsure -> report stays "new" and visible
   const raw = await env.EWS_KV.get(pub.id);
   if (!raw) return;
-  const r = JSON.parse(raw);
+  let r;
+  try {
+    r = JSON.parse(raw);
+  } catch (err) {
+    // Runs inside ctx.waitUntil(): an uncaught throw here is an unhandled
+    // rejection with no request context attached to it.
+    logSwallowed(`triage parse ${pub.id}`, err);
+    return;
+  }
   if (r.status !== "new") return; // don't touch verified/rejected/confirmed
   if (m.verdict === "spam") {
     r.status = "spam"; // hidden from the public feed by listReports()
@@ -212,7 +253,9 @@ export async function triageReport(env, pub) {
   }
   try {
     await env.EWS_KV.put(r.id, JSON.stringify(r), { expirationTtl: 60 * 60 * 24 * 180 });
-  } catch {} // KV write best-effort — worst case the report stays "new" (visible)
+  } catch (err) {
+    logSwallowed(`triage write ${r.id}`, err); // worst case the report stays "new" (visible)
+  }
 }
 
 export async function handleTestPush(request, env, ctx) {
@@ -229,17 +272,28 @@ export async function handleTestPush(request, env, ctx) {
   const rlKey = `tp:${ip}`;
   const n = Number((await env.EWS_KV.get(rlKey)) || 0);
   if (n >= 12) return json({ error: "rate limit" }, 429);
-  const sa = JSON.parse(env.FIREBASE_SA);
-  const at = await getAccessToken(sa, env);
+  let sa;
+  let at;
+  try {
+    sa = JSON.parse(env.FIREBASE_SA);
+    at = await getAccessToken(sa, env);
+  } catch (err) {
+    // Both failures mean push is misconfigured, and this endpoint exists to
+    // diagnose exactly that — an opaque 500 was the least useful answer.
+    console.error(`[rb] test-push auth failed: ${errText(err)}`);
+    return json({ error: "push auth failed", detail: errText(err) }, 502);
+  }
   try {
     await env.EWS_KV.put(rlKey, String(n + 1), { expirationTtl: 3600 });
-  } catch {} // counter is best-effort
+  } catch (err) {
+    logSwallowed("kv:put test-push rate-limit counter", err);
+  }
   // Delayed 8s: foreground FCM is silent on Android (no channel sound), so the
   // user must have time to LOCK THE SCREEN — then the siren rides the real
   // background path, which is exactly what a real red alert uses.
   const send = async () => {
     await new Promise((r) => setTimeout(r, 8000));
-    await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
+    const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
       method: "POST",
       headers: { authorization: `Bearer ${at}`, "content-type": "application/json" },
       body: JSON.stringify({
@@ -259,8 +313,11 @@ export async function handleTestPush(request, env, ctx) {
         },
       }),
     });
+    // The response used to be discarded: a rejected token or a 401 looked
+    // exactly like a delivered self-test, i.e. "push is broken AND fine".
+    if (!res.ok) throw new Error(`fcm ${res.status}: ${(await res.text()).slice(0, 200)}`);
   };
-  if (ctx) ctx.waitUntil(send());
+  if (ctx) ctx.waitUntil(send().catch((err) => logSwallowed("test-push send", err)));
   else await send();
   return json({ ok: true, delayed: 8 });
 }

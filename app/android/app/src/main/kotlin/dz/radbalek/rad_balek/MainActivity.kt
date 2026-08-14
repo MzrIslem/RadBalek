@@ -67,6 +67,7 @@ class MainActivity : FlutterActivity() {
                             Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI), 7001)
                     } catch (e: Exception) {
                         pickResult = null
+                        android.util.Log.w("RBSIREN", "pickContact failed: ${e.message}")
                         result.success(null)
                     }
                 }
@@ -82,7 +83,12 @@ class MainActivity : FlutterActivity() {
                         startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$num")))
                         result.success(true)
                     } catch (e: Exception) {
-                        result.success(false)
+                        // Reported as an error, not success(false): the Dart side
+                        // awaits this call and only its CATCH runs the url_launcher
+                        // fallback, so a plain false meant the user pressed an
+                        // emergency number and no dialer ever opened.
+                        android.util.Log.w("RBSIREN", "directCall failed: ${e.message}")
+                        result.error("dial_failed", e.message, null)
                     }
                 }
                 // Full reliability picture for the Fiabilité checklist: every
@@ -115,8 +121,16 @@ class MainActivity : FlutterActivity() {
                     ))
                 }
                 "openSoundSettings" -> {
-                    try { startActivity(Intent(Settings.ACTION_SOUND_SETTINGS)) } catch (_: Exception) {}
-                    result.success(true)
+                    // Same rule as directCall: a settings page that never opened
+                    // must not be reported as opened, or the user keeps tapping a
+                    // button that does nothing.
+                    try {
+                        startActivity(Intent(Settings.ACTION_SOUND_SETTINGS))
+                        result.success(true)
+                    } catch (e: Exception) {
+                        android.util.Log.w("RBSIREN", "openSoundSettings failed: ${e.message}")
+                        result.error("no_activity", e.message, null)
+                    }
                 }
                 // Android 14+ settings page where the user grants full-screen
                 // alerts to this app.
@@ -125,11 +139,19 @@ class MainActivity : FlutterActivity() {
                         try {
                             startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
                                 Uri.parse("package:$packageName")))
-                        } catch (_: Exception) {
-                            try { startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)) } catch (_: Exception) {}
+                            result.success(true)
+                        } catch (e: Exception) {
+                            // Per-app page missing on this OEM: fall back to the
+                            // global one, and report failure if that is gone too.
+                            try {
+                                startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT))
+                                result.success(true)
+                            } catch (e2: Exception) {
+                                android.util.Log.w("RBSIREN", "requestFsi failed: ${e2.message}")
+                                result.error("no_activity", e2.message, null)
+                            }
                         }
-                    }
-                    result.success(true)
+                    } else result.success(true)
                 }
                 else -> result.notImplemented()
             }
@@ -155,6 +177,7 @@ class MainActivity : FlutterActivity() {
             }
             res.success(null)
         } catch (e: Exception) {
+            android.util.Log.w("RBSIREN", "contact lookup failed: ${e.message}")
             res.success(null)
         }
     }

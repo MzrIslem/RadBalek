@@ -54,7 +54,11 @@ class AlertActivity : Activity() {
         try {
             val aid = intent.getStringExtra("alertId") ?: "red"
             (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(aid.hashCode())
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            // Left uncancelled, the notification's channel sound is a second
+            // siren playing against this one.
+            Log.w("RBSIREN", "notification not cancelled: ${e.message}")
+        }
         startSiren()
         vibrate()
         // Spoken announcement (AR+FR) fires automatically WITH the alert — this
@@ -62,7 +66,10 @@ class AlertActivity : Activity() {
         // Respects the in-app toggle (SharedPreferences key "flutter.rb_voice").
         val voiceOn = try {
             getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE).getBoolean("flutter.rb_voice", true)
-        } catch (_: Exception) { true }
+        } catch (e: Exception) {
+            Log.w("RBSIREN", "rb_voice preference unreadable: ${e.message}")
+            true
+        }
         if (voiceOn) startVoice()
     }
 
@@ -178,7 +185,11 @@ class AlertActivity : Activity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                 v.vibrate(VibrationEffect.createWaveform(pat, 0))
             else @Suppress("DEPRECATION") v.vibrate(pat, 0)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            // Vibration is the fallback channel for a deaf user or a muted
+            // device, so its loss matters even though the siren still plays.
+            Log.w("RBSIREN", "vibrate failed: ${e.message}")
+        }
     }
 
     // Lower the looping siren while the voice speaks, so the message is
@@ -199,7 +210,11 @@ class AlertActivity : Activity() {
                 t.setAudioAttributes(AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ALARM)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                // Without alarm-stream routing the voice can land on a muted
+                // media stream while the siren keeps ducked at 12%.
+                Log.w("RBSIREN", "TTS audio attributes rejected: ${e.message}")
+            }
             fun voiceOk(loc: Locale) = try { t.isLanguageAvailable(loc) >= TextToSpeech.LANG_AVAILABLE } catch (_: Exception) { false }
             // French was NEVER checked before — on a phone with only the system
             // voice installed, setLanguage(FRENCH) returned MISSING_DATA, speak()
@@ -218,7 +233,10 @@ class AlertActivity : Activity() {
                 try {
                     t.language = loc
                     if (t.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) duckSiren(false) else armGuard()
-                } catch (_: Exception) { duckSiren(false) }
+                } catch (e: Exception) {
+                    Log.w("RBSIREN", "speak($id) failed: ${e.message}")
+                    duckSiren(false) // never leave the siren pinned at 12%
+                }
             }
             t.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(id: String?) { runOnUiThread { duckSiren(true); armGuard() } }
@@ -258,7 +276,9 @@ class AlertActivity : Activity() {
         try {
             val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             focus?.let { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) am.abandonAudioFocusRequest(it) }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w("RBSIREN", "audio focus not abandoned: ${e.message}")
+        }
         try { (getSystemService(Context.VIBRATOR_SERVICE) as Vibrator).cancel() } catch (_: Exception) {}
     }
 

@@ -1,3 +1,5 @@
+import 'diag.dart';
+
 /// Data models mirroring the worker's /v1/alerts.json snapshot.
 class Wilaya {
   final int code;
@@ -182,13 +184,20 @@ class Snapshot {
         ((m as Map?) ?? const {}).map((k, v) => MapEntry(k.toString(), v is num ? v.toInt() : 0));
     // Per-item resilient parse: one malformed alert/incident drops ITSELF, not
     // the entire snapshot (which would blank every alert in the country).
-    List<T> parseEach<T>(dynamic list, T Function(Map<String, dynamic>) fromJson) {
+    List<T> parseEach<T>(dynamic list, T Function(Map<String, dynamic>) fromJson, String what) {
       final out = <T>[];
+      var dropped = 0;
       for (final e in (list as List?) ?? const []) {
         try {
           out.add(fromJson(e as Map<String, dynamic>));
-        } catch (_) {}
+        } catch (err) {
+          dropped++;
+          logErr('$what item parse', err);
+        }
       }
+      // A schema change upstream drops items one by one and looks like a calm
+      // day; the count makes the size of the hole visible.
+      if (dropped > 0) logErr('snapshot parse', '$dropped $what dropped of ${dropped + out.length}');
       return out;
     }
     return Snapshot(
@@ -196,9 +205,9 @@ class Snapshot {
       byColor: intMap(stats['byColor']),
       byHazard: intMap(stats['byHazard']),
       ongoingFires: ((stats['dgpcSitrep'] as Map?)?['ongoing'] as num?)?.toInt() ?? 0,
-      alerts: parseEach(j['alerts'], AlertItem.fromJson)
+      alerts: parseEach(j['alerts'], AlertItem.fromJson, 'alerts')
         ..sort((a, b) => _rank(a.color).compareTo(_rank(b.color))),
-      incidents: parseEach(j['incidents'], Incident.fromJson),
+      incidents: parseEach(j['incidents'], Incident.fromJson, 'incidents'),
     );
   }
 

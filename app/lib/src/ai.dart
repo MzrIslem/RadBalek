@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'api.dart';
+import 'diag.dart';
 
 /// AI via the Cloudflare worker (server-side Gemini, no App Check / Play
 /// Integrity dependency — works on every install; key stays server-side).
@@ -23,10 +24,14 @@ class Ai {
             body: jsonEncode({'lang': lang, 'context': context, 'messages': messages}),
           )
           .timeout(const Duration(seconds: 30));
-      if (r.statusCode != 200) return null;
+      if (r.statusCode != 200) {
+        logErr('ai chat', 'HTTP ${r.statusCode}: ${utf8.decode(r.bodyBytes)}');
+        return null;
+      }
       final t = (jsonDecode(utf8.decode(r.bodyBytes)) as Map)['text'] as String?;
       return (t == null || t.trim().isEmpty) ? null : t.trim();
-    } catch (_) {
+    } catch (err) {
+      logErr('ai chat', err);
       return null;
     }
   }
@@ -42,10 +47,14 @@ class Ai {
             body: jsonEncode({'text': text}),
           )
           .timeout(const Duration(seconds: 20));
-      if (r.statusCode != 200) return null;
+      if (r.statusCode != 200) {
+        logErr('ai category', 'HTTP ${r.statusCode}');
+        return null;
+      }
       final c = (jsonDecode(utf8.decode(r.bodyBytes)) as Map)['category'] as String?;
       return categories.contains(c) ? c : null;
-    } catch (_) {
+    } catch (err) {
+      logErr('ai category', err);
       return null;
     }
   }

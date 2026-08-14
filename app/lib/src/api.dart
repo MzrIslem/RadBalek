@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'diag.dart';
 import 'models.dart';
 
 /// Client for the Rad Balek ingest worker.
@@ -91,11 +92,15 @@ class Api {
         }),
       );
       if (r.statusCode == 429) return (report: null, error: 'rate');
-      if (r.statusCode != 201) return (report: null, error: 'error');
+      if (r.statusCode != 201) {
+        logErr('postReport', 'HTTP ${r.statusCode}');
+        return (report: null, error: 'error');
+      }
       final j = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
       final rep = j['report'] as Map<String, dynamic>?;
       return (report: rep == null ? null : CitizenReport.fromJson(rep), error: null);
-    } catch (_) {
+    } catch (err) {
+      logErr('postReport', err);
       return (report: null, error: 'error');
     }
   }
@@ -105,9 +110,13 @@ class Api {
   Future<Map<String, dynamic>> fetchAppInfo() async {
     try {
       final r = await _c.get(Uri.parse('$base/v1/app.json'));
-      if (r.statusCode != 200) return const {};
+      if (r.statusCode != 200) {
+        logErr('fetchAppInfo', 'HTTP ${r.statusCode}');
+        return const {};
+      }
       return (jsonDecode(utf8.decode(r.bodyBytes)) as Map).cast<String, dynamic>();
-    } catch (_) {
+    } catch (err) {
+      logErr('fetchAppInfo', err);
       return const {};
     }
   }
@@ -121,8 +130,10 @@ class Api {
         headers: {'content-type': 'application/json'},
         body: jsonEncode({'type': type, 'rating': rating, 'text': text, 'version': version, 'lang': lang}),
       );
+      if (r.statusCode != 201) logErr('postFeedback', 'HTTP ${r.statusCode}');
       return r.statusCode == 201;
-    } catch (_) {
+    } catch (err) {
+      logErr('postFeedback', err);
       return false;
     }
   }
@@ -133,7 +144,12 @@ class Api {
       headers: {'content-type': 'application/json'},
       body: jsonEncode({'id': id}),
     );
-    if (r.statusCode != 200) return null;
+    // null means "not counted" to the caller; without this the UI could not
+    // tell a rate limit from a server outage.
+    if (r.statusCode != 200) {
+      logErr('confirmReport', 'HTTP ${r.statusCode}');
+      return null;
+    }
     return ((jsonDecode(r.body) as Map)['confirms'] as num?)?.toInt();
   }
 }

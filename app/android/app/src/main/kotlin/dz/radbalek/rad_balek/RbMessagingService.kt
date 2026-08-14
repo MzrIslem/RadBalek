@@ -110,7 +110,11 @@ class RbMessagingService : FlutterFirebaseMessagingService() {
             if (am.getStreamVolume(AudioManager.STREAM_ALARM) < (max * 0.6).toInt()) {
                 am.setStreamVolume(AudioManager.STREAM_ALARM, (max * 0.8).toInt(), 0)
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            // The siren still plays, but possibly at zero volume — the one
+            // failure that turns a red alert into a silent notification.
+            android.util.Log.w("RBSIREN", "alarm volume not raised: ${e.message}")
+        }
 
         // 2) Full-screen intent → the dedicated AlertActivity (NOT the whole
         // app). Over the lockscreen the system launches it directly; that

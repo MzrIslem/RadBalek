@@ -11,6 +11,7 @@
 // Both are rate-limited to one push per hour per kind — the KV free tier meters
 // writes (1k/day), and a flapping source must not become a write storm.
 import { getAccessToken } from "./push.js";
+import { logSwallowed } from "./log.js";
 
 const ADMIN_TOPIC = "admin";
 const COOLDOWN_S = 3600;
@@ -21,7 +22,8 @@ async function notifyAdmin(env, kind, title, body) {
   const flag = `wd:${kind}`;
   try {
     if (await env.EWS_KV.get(flag)) return false; // already alerted this hour
-  } catch {
+  } catch (err) {
+    logSwallowed(`watchdog:cooldown ${kind}`, err);
     return false;
   }
   try {
@@ -46,9 +48,12 @@ async function notifyAdmin(env, kind, title, body) {
     if (!res.ok) return false;
     try {
       await env.EWS_KV.put(flag, "1", { expirationTtl: COOLDOWN_S });
-    } catch {} // cooldown is best-effort; worst case one extra push
+    } catch (err) {
+      logSwallowed(`watchdog:cooldown put ${kind}`, err); // worst case one extra push
+    }
     return true;
-  } catch {
+  } catch (err) {
+    logSwallowed(`watchdog:notify ${kind}`, err);
     return false; // never let the watchdog break the cron
   }
 }
@@ -75,13 +80,22 @@ export async function watchPipeline(env, snap, pushSummary) {
       await notifyAdmin(env, "push", "🔴 Rad Balek — envoi des alertes en panne",
         pushSummary.fatal || `0 envoyé, ${(pushSummary.errors || []).length} erreurs : ${JSON.stringify((pushSummary.errors || []).slice(0, 2))}`);
     }
+    // A lost or unsaved dedupe map re-sends every alert of this cycle on the
+    // next one: the red siren fires again on phones that already rang, and
+    // nothing in the delivery counters looks wrong. Page on it.
+    if (pushSummary && (pushSummary.dedupeLost || pushSummary.dedupeUnsaved)) {
+      await notifyAdmin(env, "dedupe", "⚠️ Rad Balek — anti-doublon perdu",
+        `sentmap indisponible (${pushSummary.dedupeLost || pushSummary.dedupeUnsaved}) : les alertes déjà envoyées risquent de re-sonner.`);
+    }
     // ONM parsed but yielded nothing = markup drift. This is also the exact
     // state that used to fire a false all-clear to every wilaya.
     if (snap.stats && snap.stats.onmEntries > 0 && snap.stats.activeAlerts === 0) {
       await notifyAdmin(env, "parse", "⚠️ Rad Balek — flux ONM illisible",
         `${snap.stats.onmEntries} entrées, 0 alerte active — le parsing a dérivé.`);
     }
-  } catch {}
+  } catch (err) {
+    logSwallowed("watchdog:pipeline", err);
+  }
 }
 
 // (2) Total death — called from the fetch path, where app traffic is the pulse.
@@ -91,5 +105,7 @@ export async function watchStale(env, generatedAt) {
     if (!(age > STALE_MS)) return;
     await notifyAdmin(env, "stale", "🔴 Rad Balek — collecte arrêtée",
       `Aucune collecte depuis ${Math.round(age / 60000)} min : le cron ne tourne plus.`);
-  } catch {}
+  } catch (err) {
+    logSwallowed("watchdog:stale", err);
+  }
 }
