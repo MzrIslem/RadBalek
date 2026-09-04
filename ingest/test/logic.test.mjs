@@ -22,6 +22,7 @@ import { fetchFirmsHotspots, withinLastHours, FIRMS_DAY_RANGE } from "../src/fir
 import { detectEew, feltRadiusKm, haversineKm } from "../src/quakes.js";
 import { adminAuthed } from "../src/auth.js";
 import { handleRisk } from "../src/ai.js";
+import { handleTestPush } from "../src/admin.js";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const geo = JSON.parse(readFileSync(join(__dir, "..", "data", "wilayas.json"), "utf8"));
@@ -225,4 +226,28 @@ test("handleRisk: unauthenticated callers are rejected before Gemini", async () 
   const env = { EWS_KV: { async get() { return null; }, async put() {} } };
   const res = await handleRisk({ headers: new Headers() }, new URL("https://example.test/v1/ai/risk"), env);
   assert.equal(res.status, 403);
+});
+
+test("handleTestPush: IP and token rate limits reject before FCM send", async () => {
+  const token = "a".repeat(60);
+  const req = () =>
+    new Request("https://example.test/v1/test-push", {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "1.2.3.4" },
+      body: JSON.stringify({ token }),
+    });
+  const env = (counts) => ({
+    FIREBASE_SA: "{}",
+    EWS_KV: {
+      async get(k) {
+        if (k === "tp:1.2.3.4") return String(counts.ip);
+        if (k.startsWith("tpt:")) return String(counts.token);
+        return null;
+      },
+      async put() {},
+    },
+  });
+
+  assert.equal((await handleTestPush(req(), env({ ip: 12, token: 0 }), null)).status, 429);
+  assert.equal((await handleTestPush(req(), env({ ip: 0, token: 3 }), null)).status, 429);
 });

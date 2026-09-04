@@ -19,6 +19,13 @@ export { adminAuthed, adminKeyOf };
 const json = (o, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }) });
 
+async function sha256Hex(value) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export async function handleAdminList(request, url, env) {
   if (!(await adminAuthed(request, url, env))) return json({ error: "forbidden" }, 403);
   // ?kind=feedback lists app feedback (fb:) instead of hazard reports (r:).
@@ -207,14 +214,23 @@ export async function handleTestPush(request, env, ctx) {
   if (token.length < 50 || token.length > 400) return json({ error: "bad token" }, 400);
   if (!env.FIREBASE_SA) return json({ error: "push disabled" }, 503);
   const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
-  const rlKey = `tp:${ip}`;
-  const n = Number((await env.EWS_KV.get(rlKey)) || 0);
-  if (n >= 12) return json({ error: "rate limit" }, 429);
+  const ipKey = `tp:${ip}`;
+  const tokenKey = `tpt:${await sha256Hex(token)}`;
+  const [ipN, tokenN] = await Promise.all([
+    env.EWS_KV.get(ipKey),
+    env.EWS_KV.get(tokenKey),
+  ]);
+  const ipCount = Number(ipN || 0);
+  const tokenCount = Number(tokenN || 0);
+  if (ipCount >= 12 || tokenCount >= 3) return json({ error: "rate limit" }, 429);
   const sa = JSON.parse(env.FIREBASE_SA);
   const at = await getAccessToken(sa, env);
   try {
-    await env.EWS_KV.put(rlKey, String(n + 1), { expirationTtl: 3600 });
-  } catch {} // counter is best-effort
+    await Promise.all([
+      env.EWS_KV.put(ipKey, String(ipCount + 1), { expirationTtl: 3600 }),
+      env.EWS_KV.put(tokenKey, String(tokenCount + 1), { expirationTtl: 3600 }),
+    ]);
+  } catch {} // counters are best-effort
   // Delayed 8s: foreground FCM is silent on Android (no channel sound), so the
   // user must have time to LOCK THE SCREEN — then the siren rides the real
   // background path, which is exactly what a real red alert uses.

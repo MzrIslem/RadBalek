@@ -62,6 +62,8 @@ The app collects the minimum needed to deliver alerts:
   no account or personal identifier is required.
 - **Bulk report export** — `/v1/reports.csv` is admin-only and not edge-cached.
   Public report feeds remain limited to recent community-visible reports.
+- **Push self-test** — `/v1/test-push` remains public for the in-app reliability
+  test, but is rate-limited per IP and per FCM token hash.
 
 ## Data protection — Loi n° 18-07 (Algérie) / GDPR
 

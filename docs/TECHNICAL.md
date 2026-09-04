@@ -252,7 +252,7 @@ Key KV entries:
 | `r:{ts}:{rand}` | citizen reports | on submit |
 | `fb:{inv}:{rand}` | app feedback | on submit |
 | `fcm_token` | cached OAuth token | ~55 min |
-| rate-limit counters | `rl:` `fbrl:` `cf:` `tp:` `adminrl:` `air:` | per request (TTL 1 h) |
+| rate-limit counters | `rl:` `fbrl:` `cf:` `tp:` `tpt:` `adminrl:` `air:` | per request (TTL 1 h) |
 
 **Edge Cache API** (free, unmetered, per-colo) fronts hot GETs so repeat reads
 never touch KV. Cache key is normalized (pathname + whitelisted `lite`/`limit`
@@ -282,7 +282,7 @@ export data.
 | POST | `/v1/feedback` | app feedback (rate-limited 3/h) | — |
 | POST | `/v1/ai/chat` / `/v1/ai/category` | Gemini assistant / categorizer | — |
 | POST | `/v1/ai/risk` | admin-only AI risk analysis | — |
-| POST | `/v1/test-push` | device self-test (data-only red) | — (currently public; F4 risk) |
+| POST | `/v1/test-push` | device self-test (data-only red) | public; IP + token rate limits |
 | GET | `/admin` | mission-control dashboard (HTML) | no-store |
 | GET/POST | `/v1/admin/*` | overview, reports, moderate, refresh, app-latest | Bearer + lockout |
 
@@ -470,8 +470,8 @@ Worker deploy: `. ./cf-env.ps1` (sets `CLOUDFLARE_API_TOKEN`) then
   `gemini.key`, `ingest/wrangler.toml`. Worker secrets via `wrangler secret`
   (`FIREBASE_SA`, `GEMINI_API_KEY`, `FIRMS_MAP_KEY`, `ADMIN_KEY`) — never in code.
 - **Endpoint gates:** `/v1/admin/*`, `/v1/reports.csv`, and `/v1/ai/risk` require
-  admin auth. `/v1/test-push` remains public for device self-test and is a known
-  F4 risk until a safer token/device pairing model is chosen.
+  admin auth. `/v1/test-push` remains public for device self-test, with per-IP
+  and per-token rate limits; a stronger device pairing model is still preferred.
 - Aligned with **Loi n° 18-07** (Algeria data protection) + GDPR principles
   (minimal, purpose-limited, consented). Explicitly not ANPDP-registered.
 
@@ -502,7 +502,8 @@ Worker deploy: `. ./cf-env.ps1` (sets `CLOUDFLARE_API_TOKEN`) then
   earthquake feature is an honest S-wave arrival estimate for far-field wilayas,
   not a guaranteed pre-shake warning.
 - **`/v1/test-push` is public** for device self-test; it can trigger a red siren
-  path and needs a safer pairing/auth model before production hardening.
+  path. It is now rate-limited per IP and per token, but a stronger device
+  pairing/auth model is still the clean production fix.
 - **Huawei/HMS** devices (no Google Play Services) get **no FCM** and no fallback —
   deliberately deferred (sideload). The reliability card can't see this yet.
 - **iOS** — planned; the long pole is the native siren (APNs + Critical Alerts
