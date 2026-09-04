@@ -82,8 +82,25 @@ export async function getAccessToken(sa, env) {
   return tok;
 }
 
+function eewTargetForTopic(alert, topic) {
+  if (!alert?.eew || !Array.isArray(alert.eewTargets)) return null;
+  const m = /^w(\d+)_/.exec(topic || "");
+  if (!m) return null;
+  const code = Number(m[1]);
+  return alert.eewTargets.find((t) => t.code === code) || null;
+}
+
 function messageFor(alert, topic) {
   const color = alert.color;
+  const isEew = alert.eew === true;
+  const eew = isEew ? eewTargetForTopic(alert, topic) : null;
+  const warningSeconds = eew?.warningSeconds ?? alert.warningSeconds;
+  const pWaveSeconds = eew?.pWaveSeconds ?? alert.pWaveSeconds;
+  const sWaveSeconds = eew?.sWaveSeconds ?? alert.sWaveSeconds;
+  const distanceKm = eew?.distanceKm ?? alert.distanceKm;
+  const headlineFr = eew ? `⚠️ Secousse estimée dans ~${eew.warningSeconds}s — ${eew.fr}` : alert.headline.fr;
+  const headlineAr = eew ? `⚠️ هزة متوقعة خلال ~${eew.warningSeconds} ثانية — ${eew.ar}` : alert.headline.ar;
+  const headlineEn = eew ? `⚠️ Shaking estimated in ~${eew.warningSeconds}s — ${eew.fr}` : alert.headline.en;
   const data = {
     kind: "alert",
     alertId: String(alert.id),
@@ -91,14 +108,16 @@ function messageFor(alert, topic) {
     color: String(color),
     severity: String(alert.severity || ""),
     wilayas: alert.wilayas.map((w) => w.code).join(","),
-    headline_fr: alert.headline.fr,
-    headline_ar: alert.headline.ar,
-    headline_en: alert.headline.en,
+    headline_fr: headlineFr,
+    headline_ar: headlineAr,
+    headline_en: headlineEn,
     onset: String(alert.onset || ""),
     expires: String(alert.expires || ""),
+    // EEW flags for native siren + countdown
+    ...(isEew ? { eew: "true", warningSeconds: String(warningSeconds ?? ""), pWaveSeconds: String(pWaveSeconds ?? ""), sWaveSeconds: String(sWaveSeconds ?? ""), distanceKm: String(distanceKm ?? ""), mag: String(alert.event?.match(/M([\d.]+)/)?.[1] ?? "") } : {}),
     // Short spoken lines the native AlertActivity reads aloud (AR + FR).
-    spoken_fr: `Alerte rouge. ${alert.headline.fr}. Suivez les consignes, et appelez le 14.`,
-    spoken_ar: `تحذير أحمر. ${alert.headline.ar}. اتبعوا التعليمات واتصلوا بالرقم 14.`,
+    spoken_fr: isEew ? `Secousse estimée dans ${warningSeconds ?? "?"} secondes — baissez-vous, couvrez-vous, tenez bon` : `Alerte rouge. ${alert.headline.fr}. Suivez les consignes, et appelez le 14.`,
+    spoken_ar: isEew ? `هزة متوقعة خلال ${warningSeconds ?? "?"} ثانية — انبطح واحتمي` : `تحذير أحمر. ${alert.headline.ar}. اتبعوا التعليمات واتصلوا بالرقم 14.`,
   };
   // RED is DATA-ONLY: the app's native RbMessagingService displays it itself
   // (forced alarm volume, full-screen intent, insistent siren) — channel-sound

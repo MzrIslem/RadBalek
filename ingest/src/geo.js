@@ -83,3 +83,64 @@ export function clusterHotspots(hotspots, cellDeg = 0.05) {
     return { lat, lon, count: group.length, totalFrp: Math.round(frp * 10) / 10, latestObservedAt: latest };
   });
 }
+
+function toLocalKm(lat, lon, originLat, originLon) {
+  const x = (lon - originLon) * Math.cos((originLat * Math.PI) / 180) * 111.32;
+  const y = (lat - originLat) * 110.574;
+  return [x, y];
+}
+
+function distanceToSegmentKm(pointLat, pointLon, aLat, aLon, bLat, bLon) {
+  const [ax, ay] = toLocalKm(aLat, aLon, pointLat, pointLon);
+  const [bx, by] = toLocalKm(bLat, bLon, pointLat, pointLon);
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return Math.hypot(ax, ay);
+  let t = (-ax * dx - ay * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(ax + t * dx, ay + t * dy);
+}
+
+// EEW targeting: all wilayas whose polygon is within `radiusKm` of the
+// epicentre. Distance is 0 for an onshore epicentre inside the wilaya, and the
+// shortest point-to-edge distance otherwise. Sorted nearest-first and capped so
+// one large event cannot fan out to the whole country.
+export function wilayasWithinKm(geojson, lat, lon, radiusKm = 100, cap = 8) {
+  if (!geojson?.features?.length || !Number.isFinite(lat) || !Number.isFinite(lon)) return [];
+  const out = [];
+  for (const f of geojson.features) {
+    const props = f.properties || {};
+    const code = Number(props.code);
+    if (!Number.isInteger(code) || code < 1 || code > 58) continue;
+    const rings = f.geometry?.type === "Polygon" ? [f.geometry.coordinates] : f.geometry?.coordinates;
+    if (!rings?.length) continue;
+
+    let distanceKm = Infinity;
+    let inside = false;
+    for (const poly of rings) {
+      const outer = poly?.[0];
+      if (!outer?.length) continue;
+      if (pointInRing(lon, lat, outer)) {
+        inside = true;
+        break;
+      }
+      for (let i = 0, j = outer.length - 1; i < outer.length; j = i++) {
+        const [lon1, lat1] = outer[j];
+        const [lon2, lat2] = outer[i];
+        distanceKm = Math.min(distanceKm, distanceToSegmentKm(lat, lon, lat1, lon1, lat2, lon2));
+      }
+    }
+    if (inside) distanceKm = 0;
+    if (distanceKm <= radiusKm) {
+      out.push({
+        code,
+        fr: props.fr || props.name || `Wilaya ${code}`,
+        ar: props.ar || props.name_ar || `ولاية ${code}`,
+        distanceKm: Math.round(distanceKm * 10) / 10,
+      });
+    }
+  }
+  out.sort((a, b) => a.distanceKm - b.distanceKm);
+  return out.slice(0, cap);
+}

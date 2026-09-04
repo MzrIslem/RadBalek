@@ -60,6 +60,8 @@ The app collects the minimum needed to deliver alerts:
 - **FCM registration token** — to deliver push notifications.
 - **Citizen reports** — text, category and wilaya the user chooses to submit;
   no account or personal identifier is required.
+- **Bulk report export** — `/v1/reports.csv` is admin-only and not edge-cached.
+  Public report feeds remain limited to recent community-visible reports.
 
 ## Data protection — Loi n° 18-07 (Algérie) / GDPR
 

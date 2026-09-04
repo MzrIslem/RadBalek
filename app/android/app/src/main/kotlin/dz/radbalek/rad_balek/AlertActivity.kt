@@ -47,8 +47,10 @@ class AlertActivity : Activity() {
         val title = intent.getStringExtra("title") ?: "🔴 ALERTE ROUGE"
         val body = intent.getStringExtra("body") ?: "Suivez les consignes des autorités."
         val where = intent.getStringExtra("where") ?: ""
+        val isEew = intent.getBooleanExtra("isEew", false)
+        val warningSeconds = intent.getIntExtra("warningSeconds", 0)
 
-        setContentView(buildUi(title, body, where))
+        setContentView(buildUi(title, body, where, isEew, warningSeconds))
         // Cancel the posting notification so its channel sound (a second siren
         // source) stops — this activity's MediaPlayer is now the only siren.
         try {
@@ -81,7 +83,7 @@ class AlertActivity : Activity() {
 
     private fun dp(v: Int) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
 
-    private fun buildUi(title: String, body: String, where: String): View {
+    private fun buildUi(title: String, body: String, where: String, isEew: Boolean = false, warningSeconds: Int = 0): View {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.parseColor("#B3120E"))
@@ -94,12 +96,22 @@ class AlertActivity : Activity() {
             gravity = Gravity.CENTER
             if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
         }
-        val siren = label("🔴", 64, false)
+        // EEW countdown — 1Hz tick for the estimated S-wave arrival time.
+        val countdownView: TextView? = if(isEew && warningSeconds>0) label("~$warningSeconds", 72, true) else null
+        if(countdownView != null){
+            val h = Handler(Looper.getMainLooper())
+            var left = warningSeconds
+            val tick = object: Runnable { override fun run(){ left--; if(left>=0){ countdownView.text = "$left"; if(left<=3) countdownView.setTextColor(Color.YELLOW); h.postDelayed(this, 1000) } else countdownView.text="0 — ARRIVÉE — COUVREZ-VOUS!" } }
+            h.postDelayed(tick, 1000)
+        }
+        val siren = label(if(isEew) "⚡" else "🔴", 64, false)
         ObjectAnimator.ofFloat(siren, "alpha", 1f, 0.25f).apply {
             duration = 600; repeatMode = ObjectAnimator.REVERSE; repeatCount = ObjectAnimator.INFINITE; start()
         }
+        if(countdownView != null) root.addView(countdownView)
         root.addView(siren)
         root.addView(label(title, 26, true).apply { setPadding(0, dp(14), 0, 0) })
+        if(isEew) root.addView(label("ESTIMATION D'ARRIVÉE — DROP — COVER — HOLD ON / تقدير وصول — انبطح — احتمِ — تمسّك", 14, true, 255).apply{ setPadding(0, dp(8),0,0) })
         if (where.isNotEmpty()) root.addView(label(where, 17, false, 230).apply { setPadding(0, dp(6), 0, 0) })
         root.addView(label(body, 16, false, 230).apply { setPadding(0, dp(12), 0, dp(28)) })
 

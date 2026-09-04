@@ -131,6 +131,21 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(true)
                 }
+                "openSafetySettings" -> {
+                    val opened = listOf(
+                        Intent("android.settings.SAFETY_CENTER_SETTINGS"),
+                        Intent("android.settings.ALL_SETTINGS"),
+                        Intent(Settings.ACTION_SETTINGS)
+                    ).any { intent ->
+                        try {
+                            startActivity(intent)
+                            true
+                        } catch (_: Exception) {
+                            false
+                        }
+                    }
+                    result.success(opened)
+                }
                 else -> result.notImplemented()
             }
         }

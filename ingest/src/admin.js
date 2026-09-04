@@ -12,32 +12,12 @@
 import { corsHeaders } from "./reports.js";
 import { getAccessToken } from "./push.js";
 import { geminiGenerate } from "./ai.js";
+import { adminAuthed, adminKeyOf } from "./auth.js";
+
+export { adminAuthed, adminKeyOf };
 
 const json = (o, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }) });
-
-// Audit fix: the admin key used to ride the URL query, where it leaks into
-// logs, browser history and referrers, with unlimited guesses. Now preferred
-// via Authorization: Bearer (query kept one release for compatibility), and
-// FAILED attempts are rate-limited per IP (10/h) — successful auths cost no
-// KV write.
-function adminKeyOf(request, url) {
-  const m = (request.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i);
-  return (m ? m[1] : url.searchParams.get("key")) || "";
-}
-
-export async function adminAuthed(request, url, env) {
-  if (!env.ADMIN_KEY) return false;
-  const ip = request.headers.get("cf-connecting-ip") || "0";
-  const rlKey = `adminrl:${ip}`;
-  const fails = Number((await env.EWS_KV.get(rlKey)) || 0);
-  if (fails >= 10) return false;
-  if (adminKeyOf(request, url) === env.ADMIN_KEY) return true;
-  try {
-    await env.EWS_KV.put(rlKey, String(fails + 1), { expirationTtl: 3600 });
-  } catch {}
-  return false;
-}
 
 export async function handleAdminList(request, url, env) {
   if (!(await adminAuthed(request, url, env))) return json({ error: "forbidden" }, 403);
@@ -100,7 +80,8 @@ export async function handleAdminOverview(request, url, env) {
   // Per-source incident counts + freshest observation time.
   const sources = {};
   for (const i of (snap && snap.incidents) || []) {
-    const s = sources[i.source] || (sources[i.source] = { count: 0, newest: null });
+    if (!sources[i.source]) sources[i.source] = { count: 0, newest: null };
+    const s = sources[i.source];
     s.count++;
     if (i.observedAt && (!s.newest || i.observedAt > s.newest)) s.newest = i.observedAt;
   }

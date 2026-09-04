@@ -4,9 +4,10 @@ name = "aisx-ews-ingest"
 main = "worker.js"
 compatibility_date = "2026-07-01"
 
-# Poll every 10 minutes (free plan allows cron triggers).
+# Poll every minute. The free Workers cron minimum is 1 minute; sub-minute EEW
+# needs a Durable Object alarm or WebSocket feed, not a faster cron.
 [triggers]
-crons = ["*/10 * * * *"]
+crons = ["*/1 * * * *"]
 
 [[kv_namespaces]]
 binding = "EWS_KV"

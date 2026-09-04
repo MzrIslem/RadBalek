@@ -81,14 +81,31 @@ class AppState extends ChangeNotifier {
   }
 
   /// The red alert touching MY wilayas (subscriptions + GPS wilaya), if any.
+  /// EEW (seconds-level S-wave estimate) outranks ordinary red — never hide a countdown behind a 6h red.
   AlertItem? get redMine {
     final s = snapshot;
     if (s == null) return null;
     final my = {...myWilayas, ?hereWilaya};
+    AlertItem? fallback;
     for (final a in s.alerts) {
-      if (a.color == 'red' && a.wilayas.any((w) => my.contains(w.code))) return a;
+      if (a.color != 'red' || !a.active) continue;
+      if (!a.wilayas.any((w) => my.contains(w.code))) continue;
+      if (a.isEew) return a; // seconds-level estimated arrival — no time to scroll
+      fallback ??= a;
     }
-    return null;
+    return fallback;
+  }
+
+  /// Advisory AI risk for MY wilayas — never pushes, shown as amber card + factors.
+  RiskScore? riskForMyWilaya() {
+    final s = snapshot;
+    if (s == null || s.riskScores.isEmpty) return null;
+    RiskScore? best;
+    for (final c in {...myWilayas, ?hereWilaya}) {
+      final r = s.riskScores[c];
+      if (r != null && r.score >= 30 && (best == null || r.score > best.score)) best = r;
+    }
+    return best;
   }
 
 
@@ -599,6 +616,15 @@ class AppState extends ChangeNotifier {
     try {
       await _ch.invokeMethod('openChannelEmergency');
     } catch (_) {}
+  }
+
+  /// Opens Android's closest safety/emergency settings surface for the AEA guide.
+  Future<bool> openAndroidSafetySettings() async {
+    try {
+      return await _ch.invokeMethod('openSafetySettings') == true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Every switch that can silently stop a red alert from ringing:

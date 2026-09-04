@@ -19,6 +19,9 @@ import { severityColor, fcmTopicsFor } from "../src/normalize.js";
 import { makeWilayaResolver } from "../src/geo.js";
 import { fwiClass } from "../src/fwi.js";
 import { fetchFirmsHotspots, withinLastHours, FIRMS_DAY_RANGE } from "../src/firms.js";
+import { detectEew, feltRadiusKm, haversineKm } from "../src/quakes.js";
+import { adminAuthed } from "../src/auth.js";
+import { handleRisk } from "../src/ai.js";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const geo = JSON.parse(readFileSync(join(__dir, "..", "data", "wilayas.json"), "utf8"));
@@ -121,4 +124,105 @@ test("fwiClass: EFFIS thresholds are exact (public, defensible scale)", () => {
   assert.equal(fwiClass(50.0), "extreme");
   assert.equal(fwiClass(70.0), "veryExtreme");
   assert.equal(fwiClass(NaN), null);
+});
+
+test("haversineKm: sanity 1deg ~111km at equator", () => {
+  assert.ok(Math.abs(haversineKm(0, 0, 0, 1) - 111.2) < 1, "0,0 -> 0,1 ~111km");
+  assert.ok(Math.abs(haversineKm(36, 3, 36.5, 3) - 55.6) < 2, "0.5deg lat ~55km");
+});
+
+test("feltRadiusKm: conservative magnitude scaling with clamps", () => {
+  assert.ok(Math.abs(feltRadiusKm(4.5) - 28.18) < 0.1);
+  assert.equal(feltRadiusKm(6.8), 300);
+  assert.equal(feltRadiusKm(3), 20);
+  assert.equal(feltRadiusKm(NaN), 0);
+});
+
+test("detectEew: fires only when estimated S-wave arrival is still in the future", () => {
+  const now = new Date("2026-08-27T12:00:00.000Z");
+  const at = (msAgo) => new Date(now.getTime() - msAgo).toISOString();
+  // M6.8 offshore Boumerdès, 15s after origin: northern wilayas still have a
+  // small but real S-wave lead. No-geo fallback uses the northern centroid.
+  const near = { mag: 6.8, lat: 36.6, lon: 3.5, time: at(15_000) };
+  const r1 = detectEew(near, () => now);
+  assert.equal(r1.eew, true, "near should eew");
+  assert.ok(r1.warningSeconds >= 1 && r1.warningSeconds <= 120, `warning ${r1.warningSeconds} in 1..120`);
+  assert.ok(r1.pWaveSeconds <= r1.sWaveSeconds, "p <= s");
+  assert.ok(r1.distanceKm <= 300, "distance <= felt radius");
+  // Same event 70s later: the S-wave has already passed the centroid.
+  assert.equal(detectEew({ ...near, time: at(70_000) }, () => now).eew, false, "old quake no eew");
+  // Far Med event: outside the felt radius.
+  assert.equal(detectEew({ mag: 6, lat: 40, lon: 10, time: at(10_000) }, () => now).eew, false, "far Med no eew");
+  // Small mag -> false.
+  assert.equal(detectEew({ mag: 4.0, lat: 36.5, lon: 3.05, time: at(10_000) }, () => now).eew, false, "M4 no eew");
+  // Missing coords -> false.
+  assert.equal(detectEew({ mag: 5.2, time: at(10_000) }, () => now).eew, false, "no coords no eew");
+  // Very old -> false even if geometry would otherwise work.
+  assert.equal(detectEew({ ...near, time: at(601_000) }, () => now).eew, false, "age > 600s no eew");
+});
+
+test("detectEew: near-field M<5 with no positive lead is filtered", () => {
+  const now = new Date("2026-08-27T12:00:00Z");
+  const at = (msAgo) => new Date(now.getTime() - msAgo).toISOString();
+  // ~11km from the fallback centroid, 5s after origin: S-wave arrives before a
+  // useful 5s warning can be issued for M<5.
+  const veryClose = { mag: 4.7, lat: 36.1, lon: 3.0, time: at(5_000) };
+  assert.equal(detectEew(veryClose, () => now).eew, false, "4.7 very close should be filtered");
+});
+
+test("detectEew: geo targeting returns multi-wilaya positive leads and filters zero lead", () => {
+  const now = new Date("2026-08-27T12:00:00Z");
+  const square = (lon, lat, code, fr, ar) => ({
+    type: "Feature",
+    properties: { code, fr, ar },
+    geometry: {
+      type: "Polygon",
+      coordinates: [[
+        [lon - 0.1, lat - 0.1],
+        [lon + 0.1, lat - 0.1],
+        [lon + 0.1, lat + 0.1],
+        [lon - 0.1, lat + 0.1],
+        [lon - 0.1, lat - 0.1],
+      ]],
+    },
+  });
+  const geo2 = {
+    type: "FeatureCollection",
+    features: [
+      square(3, 36, 16, "Alger", "الجزائر"),
+      square(4.11, 36, 6, "Béjaïa", "بجاية"),
+    ],
+  };
+  const r = detectEew({ mag: 6.8, lat: 36, lon: 3, time: new Date(now.getTime() - 15_000).toISOString() }, () => now, geo2);
+  assert.equal(r.eew, true, "far wilaya should still have lead");
+  assert.equal(r.targets.length, 1, "epicentral wilaya has no positive lead");
+  assert.equal(r.targets[0].code, 6, "only the ~100km wilaya is warned");
+  assert.ok(r.targets[0].warningSeconds >= 10 && r.targets[0].warningSeconds <= 20, `warning ${r.targets[0].warningSeconds} around 14s`);
+});
+
+test("adminAuthed: bearer/query accepted, wrong key rejected, repeated failures lock out", async () => {
+  const kv = () => {
+    const m = new Map();
+    return {
+      async get(k) { return m.has(k) ? m.get(k) : null; },
+      async put(k, v) { m.set(k, v); },
+    };
+  };
+  const env = { ADMIN_KEY: "secret", EWS_KV: kv() };
+  const req = (auth) => ({ headers: new Headers(auth ? { authorization: auth } : {}) });
+  const bearer = new URL("https://example.test/v1/admin/refresh");
+  const query = new URL("https://example.test/v1/admin/refresh?key=secret");
+  assert.equal(await adminAuthed(req("Bearer secret"), bearer, env), true);
+  assert.equal(await adminAuthed(req(), query, env), true);
+  assert.equal(await adminAuthed(req("Bearer nope"), bearer, env), false);
+  for (let i = 0; i < 9; i++) {
+    assert.equal(await adminAuthed(req("Bearer nope"), bearer, env), false, `failure ${i + 1}`);
+  }
+  assert.equal(await adminAuthed(req("Bearer secret"), bearer, env), false, "locked out after 10 failures");
+});
+
+test("handleRisk: unauthenticated callers are rejected before Gemini", async () => {
+  const env = { EWS_KV: { async get() { return null; }, async put() {} } };
+  const res = await handleRisk({ headers: new Headers() }, new URL("https://example.test/v1/ai/risk"), env);
+  assert.equal(res.status, 403);
 });

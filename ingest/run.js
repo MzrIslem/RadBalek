@@ -15,7 +15,7 @@ const geoPath = new URL("./data/wilayas.json", import.meta.url);
 const wilayasGeojson = existsSync(geoPath) ? JSON.parse(readFileSync(geoPath, "utf8")) : null;
 if (!wilayasGeojson) console.log("note: data/wilayas.json missing — run `node scripts/harvest-polygons.js` to enable satellite->wilaya matching\n");
 
-const result = await runPipeline({ firmsMapKey: process.env.FIRMS_MAP_KEY || null, wilayasGeojson });
+const result = await runPipeline({ firmsMapKey: process.env.FIRMS_MAP_KEY || null, wilayasGeojson, geminiApiKey: process.env.GEMINI_API_KEY || null });
 
 mkdirSync(new URL("./out", import.meta.url), { recursive: true });
 writeFileSync(new URL("./out/alerts.json", import.meta.url), JSON.stringify(result, null, 2), "utf8");

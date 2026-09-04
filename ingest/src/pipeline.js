@@ -11,8 +11,10 @@ import { fetchFirmsHotspots, significantHotspots } from "./firms.js";
 import { fetchQuakes } from "./quakes.js";
 import { makeWilayaResolver, clusterHotspots, inFlareZone } from "./geo.js";
 import { normalizeOnm, normalizeFireCluster, normalizeDgpcIncident, fcmTopicsFor } from "./normalize.js";
+import { geminiRiskScore } from "./ai.js";
+import { detectEew } from "./quakes.js";
 
-export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, fetchFn = fetch, now = () => new Date() } = {}) {
+export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, fetchFn = fetch, now = () => new Date(), geminiApiKey = null } = {}) {
   const errors = [];
   // Per-source timeout: one hung upstream (a stalled t.me / EMSC socket, or
   // dgpc.dz 522'ing to Worker→CF) must never block the whole scheduled() run —
@@ -107,33 +109,67 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
       q.wilaya ||
       null;
     // Felt quakes (M>=4.5, <6h old) escalate to a pushable red alert.
-    const quakeAge = Date.now() - Date.parse(q.time);
+    const quakeAge = now().getTime() - Date.parse(q.time);
     // Quantise to the minute: onset/expires ARE the push dedupe identity, and
     // EMSC vs USGS report the same event's origin time seconds apart — so an
     // EMSC timeout that failed over to USGS re-sirened the same earthquake.
     const qT0 = Math.round(Date.parse(q.time) / 60000) * 60000;
     if (q.mag >= 4.5 && w && quakeAge < 6 * 3600 * 1000) {
+      // Honest EEW: do not create a second alert. The same red quake alert is
+      // enriched with remaining S-wave lead time and multi-wilaya targets.
+      const eew = detectEew(q, now, wilayasGeojson);
+      const eewTargets = eew.eew ? eew.targets.filter((t) => Number.isInteger(t.code) && t.code >= 1 && t.code <= 58) : [];
+      const wilayas = eewTargets.length
+        ? eewTargets.map((t) => ({ code: t.code, fr: t.fr, ar: t.ar }))
+        : [{ code: w.code, fr: w.fr, ar: w.ar }];
+      const first = eewTargets[0];
+      const whereFr = first?.fr || w.fr;
+      const whereAr = first?.ar || w.ar;
+      const minLead = eew.warningSeconds;
+      const maxLead = Math.max(...eewTargets.map((t) => t.warningSeconds));
+      const leadLabel = maxLead > minLead ? `${minLead}-${maxLead}s` : `${minLead}s`;
+      const placeFr = wilayas.length === 1 ? whereFr : `${wilayas.length} wilayas`;
+      const placeAr = wilayas.length === 1 ? whereAr : `${wilayas.length} ولايات`;
+
       alerts.push({
         id: `${q.id}:alert`,
         class: "alert",
         source: "usgs-emsc",
-        sourceName: "EMSC/USGS",
+        sourceName: eew.eew ? "EMSC/USGS — estimation sismique" : "EMSC/USGS",
         hazard: "quake",
-        event: `Earthquake M${q.mag}`,
+        event: eew.eew ? `Earthquake S-wave estimate M${q.mag}` : `Earthquake M${q.mag}`,
         severity: "Extreme",
         color: "red",
-        urgency: "Immediate",
-        certainty: "Observed",
+        urgency: eew.eew ? "Critical" : "Immediate",
+        certainty: eew.eew ? "Forecast" : "Observed",
         onset: new Date(qT0).toISOString(),
         expires: new Date(qT0 + 6 * 3600 * 1000).toISOString(),
-        wilayas: [{ code: w.code, fr: w.fr, ar: w.ar }],
+        wilayas,
         lat: q.lat,
         lon: q.lon,
-        headline: {
-          fr: `Séisme M${q.mag} — ${w.fr}`,
-          en: `Earthquake M${q.mag} — ${w.fr}`,
-          ar: `زلزال بقوة ${q.mag} — ولاية ${w.ar}`,
-        },
+        headline: eew.eew
+          ? {
+              fr: `⚠️ Secousse estimée dans ~${leadLabel} — ${placeFr}`,
+              en: `⚠️ Shaking estimated in ~${leadLabel} — ${placeFr}`,
+              ar: `⚠️ هزة متوقعة خلال ~${leadLabel} — ${placeAr}`,
+            }
+          : {
+
+              fr: `Séisme M${q.mag} — ${whereFr}`,
+              en: `Earthquake M${q.mag} — ${whereFr}`,
+              ar: `زلزال بقوة ${q.mag} — ولاية ${whereAr}`,
+            },
+        ...(eew.eew
+          ? {
+              eew: true,
+              warningSeconds: eew.warningSeconds,
+              pWaveSeconds: eew.pWaveSeconds,
+              sWaveSeconds: eew.sWaveSeconds,
+              distanceKm: eew.distanceKm,
+              leadSeconds: eew.leadSeconds,
+              eewTargets,
+            }
+          : {}),
       });
     }
     // w already falls back through the widened radius and CRAAG's wilaya.
@@ -199,6 +235,18 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
     });
   }
 
+  // --- AI Predictive Risk Scoring (optional, runs if GEMINI_API_KEY set) ---
+  // Build context from all sources for the risk engine.
+  let riskScores = null;
+  if (geminiApiKey) {
+    try {
+      const context = buildRiskContext({
+        onm, alerts, incidents, clusters, quakes, latestSitrep, dgpcFireWilayas, firms, news, craagRows,
+      });
+      riskScores = await geminiRiskScore({ GEMINI_API_KEY: geminiApiKey }, context);
+    } catch {}
+  }
+
   const notifications = alerts.flatMap((a) => fcmTopicsFor(a).map((topic) => ({ topic, alertId: a.id })));
 
   return {
@@ -224,6 +272,7 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
     incidents,
     notifications,
     errors,
+    riskScores: riskScores || null,
   };
 }
 
@@ -231,4 +280,45 @@ function countBy(arr, fn) {
   const out = {};
   for (const x of arr) out[fn(x)] = (out[fn(x)] || 0) + 1;
   return out;
+}
+
+function buildRiskContext({ onm, alerts, incidents, clusters, quakes, latestSitrep, dgpcFireWilayas, firms, news, craagRows }) {
+  const lines = [];
+  // ONM vigilance alerts
+  for (const a of onm) {
+    if (a.wilaya) lines.push(`ONM: ${a.event} ${a.severity} for wilaya ${a.wilaya.code} (${a.wilaya.fr})`);
+    else lines.push(`ONM: ${a.event} ${a.severity} for ${a.areaDesc}`);
+  }
+  // Active alerts (normalized)
+  for (const a of alerts) {
+    const w = a.wilayas.map((x) => x.code).join(",");
+    lines.push(`ALERT: ${a.hazard} ${a.color} ${a.event} wilayas[${w}]`);
+  }
+  // FIRMS fire clusters
+  if (!firms.skipped && clusters.length) {
+    lines.push(`FIRMS: ${clusters.length} fire clusters`);
+    for (const c of clusters.slice(0, 10)) lines.push(`  cluster ${c.lat.toFixed(3)},${c.lon.toFixed(3)} det=${c.count} frp=${c.totalFrp}`);
+  }
+  // DGPC fire sitrep
+  if (latestSitrep) {
+    lines.push(`DGPC sitrep: ${latestSitrep.incidents?.length || 0} ongoing fires`);
+    for (const inc of (latestSitrep.incidents || []).filter((i) => i.status === "ongoing")) {
+      if (inc.wilaya) lines.push(`  DGPC fire ongoing wilaya ${inc.wilaya.code} (${inc.wilaya.fr})`);
+    }
+  }
+  // Earthquakes (last 6h, M>=3)
+  const recentQuakes = quakes.filter((q) => Date.now() - Date.parse(q.time) < 6 * 3600 * 1000 && q.mag >= 3);
+  if (recentQuakes.length) {
+    lines.push(`QUAKES: ${recentQuakes.length} recent`);
+    for (const q of recentQuakes.slice(0, 5)) lines.push(`  M${q.mag} ${q.lat.toFixed(2)},${q.lon.toFixed(2)} ${q.place || ""}`);
+  }
+  // CRAAG confirmations
+  if (craagRows.length) lines.push(`CRAAG: ${craagRows.length} official entries`);
+  // Press incidents
+  if (news.length) {
+    const byH = {};
+    for (const n of news) byH[n.hazard] = (byH[n.hazard] || 0) + 1;
+    lines.push(`PRESS: ${Object.entries(byH).map(([h, c]) => `${h}=${c}`).join(", ")}`);
+  }
+  return lines.join("\n").slice(0, 6000);
 }

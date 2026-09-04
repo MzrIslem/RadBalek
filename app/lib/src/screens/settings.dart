@@ -133,6 +133,28 @@ class SettingsScreen extends StatelessWidget {
                     onChanged: (_) => st.toggleVoice(),
                   ),
                 ])),
+              // --- Android Earthquake Alerts guide: system AEA is complementary
+              // and may be available on Pixel / newer Android devices.
+              if (!kIsWeb)
+                section(S.t(lang, 'sec_aea'), cs.tertiary, Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(S.t(lang, 'aea_intro'),
+                      style: TextStyle(fontSize: 12.5, height: 1.5, color: cs.onSurfaceVariant)),
+                  const SizedBox(height: 8),
+                  Text(S.t(lang, 'aea_steps'),
+                      style: TextStyle(fontSize: 12, height: 1.5, color: cs.onSurfaceVariant)),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final ok = await st.openAndroidSafetySettings();
+                      if (!ok) {
+                        messenger.showSnackBar(SnackBar(content: Text(S.t(lang, 'aea_unavailable'))));
+                      }
+                    },
+                    icon: const Icon(Icons.settings_suggest_outlined, size: 17),
+                    label: Text(S.t(lang, 'aea_btn'), style: const TextStyle(fontSize: 12.5)),
+                  ),
+                ])),
               // --- Contacts d'urgence ---
               section(S.t(lang, 'set_emerg'), vigilance('red', st.dark).solid, Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 _SosEditor(),

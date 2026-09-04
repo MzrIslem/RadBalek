@@ -6,7 +6,7 @@
 >
 > Status: **v1.2.1** live (Firebase famille + GitHub + in-app updater). Source is
 > private (public GitHub repo is README-only). This doc is internal.
-> Last updated 2026-08.
+> Last updated 2026-09.
 
 ---
 
@@ -46,7 +46,7 @@ flowchart LR
     OM[Open-Meteo]
     EFFIS[Copernicus EFFIS]
   end
-  Sources --> W[Cloudflare Worker\ncron */10 min]
+  Sources --> W[Cloudflare Worker\ncron */1 min]
   W -->|normalize + dedupe| KV[(Workers KV)]
   W -->|red/orange topics| FCM[Firebase FCM]
   W -->|/v1/*.json edge-cached| APP[Flutter app]
@@ -56,8 +56,9 @@ flowchart LR
 
 Three components:
 
-- **`ingest/`** — a stateless **Cloudflare Worker**. A 10-minute cron fetches all
+- **`ingest/`** — a stateless **Cloudflare Worker**. A 1-minute cron fetches all
   sources, normalizes them into one trilingual snapshot, dedupes and pushes FCM,
+  computes honest seconds-level S-wave arrival estimates for fresh felt quakes,
   and serves a JSON API. No server, no database — Workers KV + edge Cache API.
 - **`app/`** — a **Flutter** app (Android; iOS planned). Native Kotlin owns the
   red-alert siren and full-screen lockscreen alert.
@@ -93,6 +94,7 @@ algeria-ews/
 │     ├─ push.js                   # FCM send, dedupe, all-clear, heartbeats
 │     ├─ watchdog.js               # dead-man alerts to the maintainer
 │     ├─ reports.js                # citizen reports + confirm + feedback + CSV
+│     ├─ auth.js                   # shared admin bearer/query auth + lockout
 │     ├─ admin.js                  # curator endpoints + AI moderation (Gemini)
 │     ├─ adminui.js                # /admin mission-control dashboard (HTML)
 │     ├─ ai.js                     # Gemini chat + report categorization
@@ -130,7 +132,7 @@ algeria-ews/
 | **DGPC Telegram** | `telegram.js` | Protection Civile field sitreps (fires, road crashes) | Scrape of t.me/@DGPCDZ. |
 | **dgpc.dz** | `dgpcweb.js` | Resilience path for the Telegram scrape | WordPress REST `/wp-json/wp/v2/posts`; needs a browser UA (WAF 403s bare UA); sits behind Cloudflare (occasional 522 → 2 retries + RSS fallback). |
 | **Algerian press** | `news.js` | Hazard classes official feeds miss (floods in progress, road closures, collapses) | RSS (TSA, Ennahar). Marked **NON OFFICIEL**. |
-| **EMSC/USGS** | `quakes.js` | Earthquakes | EMSC primary, USGS fallback. M≥4.5 + <6 h + a resolvable wilaya → **red push**. Onset quantised to the minute (EMSC/USGS differ by seconds → avoids double-siren). |
+| **EMSC/USGS** | `quakes.js` | Earthquakes | EMSC primary, USGS fallback. M≥4.5 + <6 h + a resolvable wilaya → **red push**. Onset quantised to the minute (EMSC/USGS differ by seconds → avoids double-siren). Fresh quakes (≤10 min) also get an honest S-wave arrival estimate for up to 8 positive-lead wilayas. |
 | **CRAAG** | `craag.js` | Official national quake authority | **Lags days-to-weeks** — enrichment only (official magnitude + the wilaya name EMSC omits), never an alert trigger. |
 | **Open-Meteo** | `weather.js` | Temp, feels-like, wind, humidity, AQI, 48 h forecast, **FWI inputs** | CC BY 4.0. |
 | **Copernicus EFFIS** | (worker rasters) | Fire Weather Index raster + burnt areas | WMS layers `mf010.fwi` and `modis.ba`. MapServer returns errors as HTTP 200 + HTML → **PNG magic-byte validation** on both fetch and cache read. |
@@ -147,7 +149,7 @@ flash floods in small wadis), Facebook/Waze/X.
 
 ```js
 export default {
-  scheduled(_e, env, ctx) { ctx.waitUntil(refresh(env, /*doPush*/ true)); }, // cron */10
+  scheduled(_e, env, ctx) { ctx.waitUntil(refresh(env, /*doPush*/ true)); }, // cron */1
   fetch(req, env, ctx)    { /* JSON API router + edge cache */ },
 }
 ```
@@ -179,6 +181,13 @@ normalize → produce one snapshot:
 - `alerts` — official (ONM) → **may notify loudly**.
 - `incidents` — observations (satellite, field posts) → map pins, silent by
   default, promoted only by curation.
+
+**Earthquake S-wave estimate:** true pre-event EEW is not possible from EMSC/USGS
+catalog latency. For fresh felt quakes (`age <= 600 s`, `M >= 4.5`), `detectEew()`
+computes remaining S-wave arrival seconds per wilaya from the origin time,
+`V_P = 6.0 km/s`, `V_S = 3.5 km/s`, and polygon distance. Only wilayas with a
+positive lead are pushed, capped at 8. The alert remains one red quake alert with
+`eew: true`, `warningSeconds`, `pWaveSeconds`, `sWaveSeconds`, and `eewTargets`.
 
 ### 5.3 Wilaya resolution (`geo.js`)
 
@@ -245,8 +254,10 @@ Key KV entries:
 **Edge Cache API** (free, unmetered, per-colo) fronts hot GETs so repeat reads
 never touch KV. Cache key is normalized (pathname + whitelisted `lite`/`limit`
 params) so a junk `?x=` can't bypass into a KV-list DoS. TTLs: alerts 120 s,
-reports 600 s, reports.csv 1800 s, history 300 s, weather 600 s, fwi/burnt **not
+reports 600 s, history 300 s, weather 600 s, fwi/burnt **not
 edge-cached** (a cached MapServer error page can't be purged on workers.dev).
+`/v1/reports.csv` is also **not edge-cached** because it is admin-only PII-adjacent
+export data.
 
 ### 5.7 API endpoints
 
@@ -263,15 +274,19 @@ edge-cached** (a cached MapServer error page can't be purged on workers.dev).
 | GET | `/v1/push-status.json` | last push summary | no-store |
 | POST | `/v1/reports` | citizen report (AI-triaged async) | — |
 | POST | `/v1/reports/confirm` | community 👍 (rate-limited 20/h) | — |
-| GET | `/v1/reports.json` / `.csv` | community feed / export | 600/1800 s |
+| GET | `/v1/reports.json` | community feed | 600 s |
+| GET | `/v1/reports.csv` | admin-only bulk export | no-store + Bearer |
 | POST | `/v1/feedback` | app feedback (rate-limited 3/h) | — |
 | POST | `/v1/ai/chat` / `/v1/ai/category` | Gemini assistant / categorizer | — |
-| POST | `/v1/test-push` | device self-test (data-only red) | — |
+| POST | `/v1/ai/risk` | admin-only AI risk analysis | — |
+| POST | `/v1/test-push` | device self-test (data-only red) | — (currently public; F4 risk) |
 | GET | `/admin` | mission-control dashboard (HTML) | no-store |
 | GET/POST | `/v1/admin/*` | overview, reports, moderate, refresh, app-latest | Bearer + lockout |
 
-**Admin auth:** `Authorization: Bearer <ADMIN_KEY>` (or `?key=` compat), with a
-10-failed-tries/hour/IP lockout (`adminrl:{ip}`). Successful auth costs no write.
+**Admin auth:** shared `src/auth.js` primitive — `Authorization: Bearer <ADMIN_KEY>`
+(or `?key=` compat), with a 10-failed-tries/hour/IP lockout (`adminrl:{ip}`).
+Successful auth costs no write. `/v1/admin/*`, `/v1/reports.csv`, and
+`/v1/ai/risk` use it.
 
 ### 5.8 Fire risk (`fwi.js`, `weather.js`)
 
@@ -287,8 +302,9 @@ but there is nothing to burn. The app hides the card entirely for `fuel==desert`
 Gemini Flash-Lite reviews each new citizen report async (`ctx.waitUntil`),
 **fail-open**: confident spam/abuse → hidden; wrong category → corrected + kept;
 anything uncertain stays visible. Only ever acts on a still-`new` report.
-(Gotcha: `thinkingConfig:{thinkingBudget:0}` hard-400s the lite model — never
-send it.)
+`/v1/ai/risk` is admin-only because it can synthesize hazard analysis from
+operational data. (Gotcha: `thinkingConfig:{thinkingBudget:0}` hard-400s the lite
+model — never send it.)
 
 ---
 
@@ -320,7 +336,8 @@ conditions), Map (`flutter_map` + CARTO tiles; layers: vigilance choropleth,
 fires, quakes, heat/wind/humidity, **FWI**, **burnt areas**; scene-cached so it
 rebuilds only when data/layer/theme changes, not per zoom tick), Sections
 (official alerts / nearby / terrain — **lazy lists**), Settings (wilayas, hazard
-toggles, **Fiabilité** reliability checklist, emergency contacts, **Texte grand**),
+toggles, **Fiabilité** reliability checklist, Android Earthquake Alerts guide,
+emergency contacts, **Texte grand**),
 Consignes (offline trilingual safety guides), Report sheet, AI chat, Feedback.
 
 ### 6.4 Localization & RTL
@@ -361,6 +378,11 @@ to keep Dart delivery) → `showRed(data)`:
 owns the siren + vibration + **TextToSpeech** (ducks the siren, speaks FR then AR,
 un-ducks — with a French-voice availability check and an unconditional un-duck so
 the siren can never stay muted).
+
+Earthquake S-wave alerts use honest native copy: `SECOUSSE ESTIMÉE`, a `~Ns`
+countdown, and `ARRIVÉE` at zero. `MainActivity` also exposes
+`openSafetySettings` on the `rb/channels` method channel for the Android
+Earthquake Alerts guide in Settings.
 
 ### 7.2 Hard-won lessons (do not regress)
 
@@ -444,6 +466,9 @@ Worker deploy: `. ./cf-env.ps1` (sets `CLOUDFLARE_API_TOKEN`) then
   `firebase-sa.json`, `google-services.json`, `cf-env.ps1`, `*token*.txt`,
   `gemini.key`, `ingest/wrangler.toml`. Worker secrets via `wrangler secret`
   (`FIREBASE_SA`, `GEMINI_API_KEY`, `FIRMS_MAP_KEY`, `ADMIN_KEY`) — never in code.
+- **Endpoint gates:** `/v1/admin/*`, `/v1/reports.csv`, and `/v1/ai/risk` require
+  admin auth. `/v1/test-push` remains public for device self-test and is a known
+  F4 risk until a safer token/device pairing model is chosen.
 - Aligned with **Loi n° 18-07** (Algeria data protection) + GDPR principles
   (minimal, purpose-limited, consented). Explicitly not ANPDP-registered.
 
@@ -468,6 +493,11 @@ Worker deploy: `. ./cf-env.ps1` (sets `CLOUDFLARE_API_TOKEN`) then
 
 - **KV write budget** is the structural fragility → **D1 (SQLite)** migration is
   the planned move (100k writes/day free; enables reports-at-scale + thermal).
+- **True pre-event EEW is not possible** with public catalog latency. The current
+  earthquake feature is an honest S-wave arrival estimate for far-field wilayas,
+  not a guaranteed pre-shake warning.
+- **`/v1/test-push` is public** for device self-test; it can trigger a red siren
+  path and needs a safer pairing/auth model before production hardening.
 - **Huawei/HMS** devices (no Google Play Services) get **no FCM** and no fallback —
   deliberately deferred (sideload). The reliability card can't see this yet.
 - **iOS** — planned; the long pole is the native siren (APNs + Critical Alerts
@@ -484,7 +514,7 @@ Worker deploy: `. ./cf-env.ps1` (sets `CLOUDFLARE_API_TOKEN`) then
 **Worker secrets** (`wrangler secret put`): `FIREBASE_SA` (service-account JSON),
 `GEMINI_API_KEY`, `FIRMS_MAP_KEY`, `ADMIN_KEY`.
 **Worker vars** (`wrangler.toml`): KV namespace binding `EWS_KV`, `crons =
-["*/10 * * * *"]`.
+["*/1 * * * *"]`.
 **App deps:** firebase_core/messaging, flutter_map + latlong2, flutter_tts,
 geolocator, share_plus, shared_preferences, url_launcher, provider, http.
 **Firebase project:** `ewsdz-3e981` · **package:** `dz.radbalek.rad_balek` ·

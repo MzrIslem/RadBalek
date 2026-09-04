@@ -115,14 +115,19 @@ class RbMessagingService : FlutterFirebaseMessagingService() {
         // 2) Full-screen intent → the dedicated AlertActivity (NOT the whole
         // app). Over the lockscreen the system launches it directly; that
         // activity shows the ALERT face and owns the siren.
+        val isEew = d["eew"] == "true"
         val alertIntent = Intent(this, AlertActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            .putExtra("title", title)
-            .putExtra("body", body)
+            .putExtra("title", if(isEew) "⚡ SECOUSSE ESTIMÉE — ${d["warningSeconds"]?:"?"}s" else title)
+            .putExtra("body", if(isEew) "M${d["mag"]?:"?"} à ~${d["distanceKm"]?:"?"}km — arrivée estimée des secousses dans ${d["warningSeconds"]?:"?"}s — Baissez-vous, couvrez-vous, tenez bon / انبطح واحتمي" else body)
             .putExtra("where", d["wilayas"]?.takeIf { it.isNotBlank() }?.let { "Wilaya(s): $it" } ?: "")
             .putExtra("alertId", d["alertId"] ?: "red")
-            .putExtra("spoken_fr", d["spoken_fr"] ?: title)
-            .putExtra("spoken_ar", d["spoken_ar"] ?: body)
+            .putExtra("spoken_fr", if(isEew) (d["spoken_fr"] ?: "Secousse estimée dans ${d["warningSeconds"]?:"?"} secondes — baissez-vous, couvrez-vous, tenez bon") else (d["spoken_fr"] ?: title))
+            .putExtra("spoken_ar", if(isEew) (d["spoken_ar"] ?: "هزة متوقعة خلال ${d["warningSeconds"]?:"?"} ثانية — انبطح واحتمي") else (d["spoken_ar"] ?: body))
+            .putExtra("isEew", isEew)
+            .putExtra("warningSeconds", d["warningSeconds"]?.toIntOrNull() ?: 0)
+            .putExtra("pWaveSeconds", d["pWaveSeconds"]?.toIntOrNull() ?: 0)
+            .putExtra("sWaveSeconds", d["sWaveSeconds"]?.toIntOrNull() ?: 0)
         val fsi = PendingIntent.getActivity(
             this, 1001, alertIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE

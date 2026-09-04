@@ -1,6 +1,7 @@
 // Gemini via Google AI Studio, server-side (no App Check / Play Integrity
 // dependency — works on every install). Key: env.GEMINI_API_KEY.
 import { corsHeaders } from "./reports.js";
+import { adminAuthed } from "./auth.js";
 
 const MODEL = "gemini-flash-lite-latest"; // ~1s vs ~16s for flash-latest
 const json = (o, s = 200) =>
@@ -95,5 +96,62 @@ export async function handleCategory(request, env) {
     return json({ category: cats.includes(word) ? word : null });
   } catch (e) {
     return json({ error: String(e.message).slice(0, 120) }, 502);
+  }
+}
+
+// --- Predictive Risk Scoring (internal, called by pipeline) ---
+// Returns { wilayaCode: { score: 0-100, hazard, factors: string[] } }
+export async function geminiRiskScore(env, context) {
+  if (!env.GEMINI_API_KEY) return null;
+  try {
+    const out = await geminiGenerate(env, {
+      system: `You are the predictive risk engine for Rad Balek (Algeria early-warning). ` +
+        `Given current multi-source hazard data for Algeria, output a JSON object mapping ` +
+        `wilaya codes (1-58) to risk assessments. Each entry: {score: 0-100, hazard: string, ` +
+        `factors: string[]}. Only include wilayas with score >= 30. Be conservative: ` +
+        `false alarms erode trust more than missed events. Consider: official ONM vigilance, ` +
+        `FIRMS fire clusters, recent quakes, weather forecasts, citizen reports. ` +
+        `Hazards: heat, fire, flood, storm, wind, sandstorm, cold, quake, road, other. ` +
+        `Reply with VALID JSON ONLY, no markdown, no commentary.`,
+      contents: [{ role: "user", parts: [{ text: String(context).slice(0, 6000) }] }],
+      maxTokens: 1500,
+      temperature: 0.2,
+      noThinking: true,
+    });
+    const parsed = JSON.parse(out);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const result = {};
+    for (const [code, v] of Object.entries(parsed)) {
+      const c = Number(code);
+      if (!Number.isInteger(c) || c < 1 || c > 58) continue;
+      if (!v || typeof v.score !== "number") continue;
+      result[c] = { score: Math.min(100, Math.max(0, v.score)), hazard: String(v.hazard || "other"), factors: Array.isArray(v.factors) ? v.factors.slice(0, 5) : [] };
+    }
+    return Object.keys(result).length ? result : null;
+  } catch {
+    return null; // fail-open: no risk scores rather than wrong ones
+  }
+}
+
+// POST /v1/ai/risk  { context } -> per-wilaya risk scores (admin/dev only)
+export async function handleRisk(request, url, env) {
+  // F1: this endpoint can spend the Gemini key and returns model-derived risk
+  // assessments. The Flutter app never calls it, so it is admin-only.
+  if (!(await adminAuthed(request, url, env))) return json({ error: "forbidden" }, 403);
+  if (!env.GEMINI_API_KEY) return json({ error: "ai disabled" }, 503);
+  if (!(await rateOk(env, request, 10))) return json({ error: "rate limit" }, 429);
+  let b;
+  try {
+    b = await request.json();
+  } catch {
+    return json({ error: "bad json" }, 400);
+  }
+  const context = String(b.context || "").slice(0, 6000);
+  if (!context) return json({ error: "context required" }, 400);
+  try {
+    const scores = await geminiRiskScore(env, context);
+    return json({ scores: scores || {}, generatedAt: new Date().toISOString() });
+  } catch (e) {
+    return json({ error: String(e.message).slice(0, 160) }, 502);
   }
 }

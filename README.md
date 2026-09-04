@@ -34,7 +34,7 @@ Rad Balek is an attempt to fill that gap.
 ## Architecture
 
 ```
-Data sources ──► Cloudflare Worker (ingest, every 10 min) ──► Flutter app (Android)
+Data sources ──► Cloudflare Worker (ingest, every 1 min) ──► Flutter app (Android)
                  │                                            │
                  ├─ normalizes to a trilingual snapshot        ├─ FCM topic per wilaya+hazard
                  ├─ dedupes + pushes FCM (red = data-only)     ├─ native siren + lockscreen alert
@@ -42,7 +42,8 @@ Data sources ──► Cloudflare Worker (ingest, every 10 min) ──► Flutte
 ```
 
 - **`ingest/`** — Cloudflare Worker: fetches sources, normalizes, dedupes, pushes FCM,
-  serves the JSON API. Runs on a 10-minute cron.
+  serves the JSON API. Runs on a 1-minute cron for seconds-level earthquake lead
+  estimates.
 - **`app/`** — Flutter app (Android). Native Kotlin handles the red-alert siren and the
   full-screen lockscreen alert, because notification-channel sounds are suppressed by
   some OEMs in silent mode.
@@ -83,6 +84,7 @@ Secrets the worker expects (set with `npx wrangler secret put NAME`):
 | `FIREBASE_SA` | Firebase service-account JSON (sends push) |
 | `FIRMS_MAP_KEY` | NASA FIRMS API key (satellite fires) |
 | `GEMINI_API_KEY` | Optional — AI assistant + report triage |
+| `ADMIN_KEY` | Protects admin, bulk report export, and AI risk endpoints |
 
 **Nothing secret is committed to this repository.** Signing keys, service accounts and API
 tokens are gitignored. If you fork this, use your own.

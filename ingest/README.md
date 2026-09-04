@@ -2,7 +2,7 @@
 
 Early warnings to safeguard **people, vegetation and animals** across all 58 wilayas.
 
-**Deployed:** https://aisx-ews-ingest.md-mezouar.workers.dev (cron every 10 min)
+**Deployed:** https://aisx-ews-ingest.md-mezouar.workers.dev (cron every 1 min)
 
 | Endpoint | What |
 |---|---|
@@ -11,7 +11,7 @@ Early warnings to safeguard **people, vegetation and animals** across all 58 wil
 | `POST /v1/reports` | Citizen report `{category, wilaya\|lat+lon, description?, lang}` — categories: fire, smoke, road, flood, animal, heat, other |
 | `POST /v1/reports/confirm` | Community confirmation `{id}` (no self-confirm; ≥3 → community-confirmed) |
 | `GET /v1/reports.json` | Recent citizen reports |
-| `GET /v1/reports.csv` | Full export for analysis |
+| `GET /v1/reports.csv` | Full export for analysis — admin Bearer key required |
 | `GET /v1/history.json` | Hourly stats snapshots (7-day window served; 1-year retention) |
 
 ## Push notifications (FCM)
@@ -65,7 +65,7 @@ wrangler secret put FIRMS_MAP_KEY       # optional
 wrangler deploy
 ```
 
-Cron runs every 10 min; snapshot served at `GET /v1/alerts.json` (CORS open,
+Cron runs every 1 min; snapshot served at `GET /v1/alerts.json` (CORS open,
 2 min cache). The mobile app reads this endpoint and subscribes to FCM topics.
 
 ## Output model (CAP-aligned)

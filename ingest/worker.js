@@ -26,13 +26,13 @@ import {
   handleTestPush,
   triageReport,
   liteSnapshot,
-  adminAuthed,
   handleAdminOverview,
   handleAdminAppLatest,
 } from "./src/admin.js";
+import { adminAuthed } from "./src/auth.js";
 import { ADMIN_HTML } from "./src/adminui.js";
 import { handleWeather } from "./src/weather.js";
-import { handleChat, handleCategory } from "./src/ai.js";
+import { handleChat, handleCategory, handleRisk } from "./src/ai.js";
 import { watchPipeline, watchStale } from "./src/watchdog.js";
 
 export default {
@@ -56,7 +56,6 @@ export default {
       // so each TTL miss costs a list+N-gets per colo. 600/1800 keeps the
       // read/list fan-out inside the free quota even from 3-4 colos.
       "/v1/reports.json": 600,
-      "/v1/reports.csv": 1800, // 1 list + up to 1000 gets — must be cached hard
       "/v1/history.json": 300, // kills the 168-get burst per history open
       "/v1/weather.json": 600,
       // NOTE: /v1/fwi.png and /v1/burnt.png are intentionally NOT edge-cached.
@@ -190,6 +189,7 @@ export default {
     }
     if (path === "/v1/ai/chat" && req.method === "POST") return handleChat(req, env);
     if (path === "/v1/ai/category" && req.method === "POST") return handleCategory(req, env);
+    if (path === "/v1/ai/risk" && req.method === "POST") return handleRisk(req, url, env);
     if (path === "/v1/weather.json") return store(await handleWeather(env, geo));
     if (path === "/v1/wilayas.json") return handleWilayasList();
     if (path === "/v1/boundaries.json")
@@ -214,7 +214,16 @@ export default {
     if (path === "/v1/feedback" && req.method === "POST") return handleFeedback(req, env);
     if (path === "/v1/reports/confirm" && req.method === "POST") return handleConfirmReport(req, env);
     if (path === "/v1/reports.json") return store(await handleListReports(url, env));
-    if (path === "/v1/reports.csv") return store(await handleExportCsv(env));
+    if (path === "/v1/reports.csv") {
+      // F3: bulk citizen-report export contains descriptions and coarse
+      // positions. It must never be public or edge-cached.
+      if (!(await adminAuthed(req, url, env)))
+        return new Response(JSON.stringify({ error: "forbidden" }), {
+          status: 403,
+          headers: corsHeaders({ "content-type": "application/json; charset=utf-8" }),
+        });
+      return handleExportCsv(env);
+    }
 
     if (path === "/v1/push-status.json") {
       const raw = (await env.EWS_KV.get("push:last")) || '{"neverRan":true}';
@@ -306,6 +315,7 @@ async function refresh(env, doPush = false) {
   const snap = await runPipeline({
     firmsMapKey: env.FIRMS_MAP_KEY || null,
     wilayasGeojson: geo,
+    geminiApiKey: env.GEMINI_API_KEY || null,
   });
   // Keep the fire map alive when this cycle's FIRMS fetch was skipped.
   await reconcileFires(env, snap);

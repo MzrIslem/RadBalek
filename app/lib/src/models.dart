@@ -14,6 +14,19 @@ class Wilaya {
   String name(String lang) => lang == 'ar' ? ar : fr;
 }
 
+/// Predictive risk per wilaya — AI advisory, never pushes, shown as amber card.
+class RiskScore {
+  final int score; // 0..100
+  final String hazard;
+  final List<String> factors;
+  const RiskScore({required this.score, required this.hazard, required this.factors});
+  factory RiskScore.fromJson(Map<String, dynamic> j) => RiskScore(
+        score: (j['score'] as num?)?.toInt().clamp(0, 100) ?? 0,
+        hazard: j['hazard'] as String? ?? 'other',
+        factors: ((j['factors'] as List?) ?? const []).map((e) => e.toString()).take(5).toList(),
+      );
+}
+
 class AlertItem {
   final String id;
   final String source;
@@ -25,6 +38,12 @@ class AlertItem {
   final String? sent;
   final List<Wilaya> wilayas;
   final Map<String, String> headline;
+  // EEW extension — honest S-wave arrival estimate; null for non-EEW alerts
+  final bool eew;
+  final int? warningSeconds;
+  final int? pWaveSeconds;
+  final int? sWaveSeconds;
+  final int? distanceKm;
 
   const AlertItem({
     required this.id,
@@ -37,6 +56,11 @@ class AlertItem {
     this.sent,
     required this.wilayas,
     required this.headline,
+    this.eew = false,
+    this.warningSeconds,
+    this.pWaveSeconds,
+    this.sWaveSeconds,
+    this.distanceKm,
   });
 
   /// Still valid right now. A LIVE snapshot never carries an expired alert (the
@@ -61,7 +85,15 @@ class AlertItem {
             .map((w) => Wilaya.fromJson(w as Map<String, dynamic>))
             .toList(),
         headline: ((j['headline'] as Map?) ?? const {}).map((k, v) => MapEntry(k.toString(), v.toString())),
+        eew: j['eew'] == true,
+        warningSeconds: (j['warningSeconds'] as num?)?.toInt(),
+        pWaveSeconds: (j['pWaveSeconds'] as num?)?.toInt(),
+        sWaveSeconds: (j['sWaveSeconds'] as num?)?.toInt(),
+        distanceKm: (j['distanceKm'] as num?)?.toInt(),
       );
+
+  /// True for EEW alerts: seconds-level estimated S-wave arrival, not a guaranteed pre-event warning.
+  bool get isEew => eew && warningSeconds != null;
 }
 
 class Incident {
@@ -166,6 +198,7 @@ class Snapshot {
   final int ongoingFires;
   final List<AlertItem> alerts;
   final List<Incident> incidents;
+  final Map<int, RiskScore> riskScores; // empty when AI disabled / offline cache
 
   const Snapshot({
     required this.generatedAt,
@@ -174,6 +207,7 @@ class Snapshot {
     required this.ongoingFires,
     required this.alerts,
     required this.incidents,
+    this.riskScores = const {},
   });
 
   factory Snapshot.fromJson(Map<String, dynamic> j) {
@@ -191,14 +225,34 @@ class Snapshot {
       }
       return out;
     }
+    // riskScores is Map<String, {score,hazard,factors}> — resilient like the rest
+    final rs = <int, RiskScore>{};
+    try {
+      final raw = j['riskScores'] as Map?;
+      if (raw != null) {
+        for (final e in raw.entries) {
+          final code = int.tryParse(e.key.toString());
+          if (code == null || code < 1 || code > 58) continue;
+          try {
+            rs[code] = RiskScore.fromJson(e.value as Map<String, dynamic>);
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
     return Snapshot(
       generatedAt: j['generatedAt'] as String? ?? '',
       byColor: intMap(stats['byColor']),
       byHazard: intMap(stats['byHazard']),
       ongoingFires: ((stats['dgpcSitrep'] as Map?)?['ongoing'] as num?)?.toInt() ?? 0,
       alerts: parseEach(j['alerts'], AlertItem.fromJson)
-        ..sort((a, b) => _rank(a.color).compareTo(_rank(b.color))),
+        ..sort((a, b) {
+          // EEW first, then red, then orange — life-critical order
+          final ae = a.eew ? -1 : _rank(a.color);
+          final be = b.eew ? -1 : _rank(b.color);
+          return ae.compareTo(be);
+        }),
       incidents: parseEach(j['incidents'], Incident.fromJson),
+      riskScores: rs,
     );
   }
 
