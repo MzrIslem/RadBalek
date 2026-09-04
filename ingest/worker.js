@@ -309,6 +309,35 @@ async function reconcileFires(env, snap) {
   } catch {}
 }
 
+// KV write budget (free tier: 1000 writes/day) makes `latest` the one cron
+// write we cannot do blindly every minute. The EEW path needs a */1 cron, but
+// the snapshot only matters when its public content changes — or when it must
+// be refreshed to prove the cron is alive. So: write on content change, and at
+// least every 10 minutes (watchStale fires around 35 min).
+function snapshotSignature(snap) {
+  return JSON.stringify({
+    alerts: snap.alerts || [],
+    incidents: snap.incidents || [],
+    notifications: snap.notifications || [],
+    errors: (snap.errors || []).map((e) => e && e.source).sort(),
+  });
+}
+
+function shouldWriteLatest(prevRaw, snap) {
+  if (!prevRaw) return true;
+  let prev = null;
+  try {
+    prev = JSON.parse(prevRaw);
+  } catch {
+    return true;
+  }
+  const prevAt = Date.parse(prev && prev.generatedAt);
+  const snapAt = Date.parse(snap && snap.generatedAt);
+  if (!Number.isFinite(prevAt) || !Number.isFinite(snapAt)) return true;
+  if (snapAt - prevAt > 10 * 60 * 1000) return true;
+  return snapshotSignature(prev) !== snapshotSignature(snap);
+}
+
 // doPush: only the scheduled cron pushes — fetch-triggered rebuilds must not,
 // or concurrent invocations race on the dedupe map and double-send.
 async function refresh(env, doPush = false) {
@@ -323,7 +352,9 @@ async function refresh(env, doPush = false) {
   // 429 — that must never kill the push path below (2026-07-19 outage: the
   // whole cron died here for 3h and no alerts went out).
   try {
-    await env.EWS_KV.put("latest", JSON.stringify(snap));
+    const body = JSON.stringify(snap);
+    const prevRaw = await env.EWS_KV.get("latest");
+    if (shouldWriteLatest(prevRaw, snap)) await env.EWS_KV.put("latest", body);
   } catch {}
   if (!doPush) return snap;
 

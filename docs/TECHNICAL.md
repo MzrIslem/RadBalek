@@ -157,6 +157,9 @@ export default {
 - **Only the cron pushes.** Fetch-triggered rebuilds call `refresh(env)` with
   `doPush=false`, so concurrent invocations can never race the dedupe map and
   double-send. This invariant is tested and load-bearing.
+- **`latest` is write-on-change.** The `*/1` cron can rebuild every minute, but
+  KV stores the snapshot only when alerts/incidents/notifications/error sources
+  change, or when the stored snapshot is older than 10 minutes.
 - Per-source **timeouts** (`AbortSignal`, 8–20 s) wrapped in `Promise.allSettled`
   — one hung upstream can never block the others (the 3-h-outage class).
 
@@ -238,7 +241,7 @@ Key KV entries:
 
 | Key | Purpose | Write cadence |
 |---|---|---|
-| `latest` | current snapshot | every cron (best-effort) |
+| `latest` | current snapshot | on content change + at least every 10 min |
 | `sentmap` | push dedupe (content keys, TTL) | write-on-change |
 | `activetopics` | last cycle's delivered topics (all-clear diff) | write-on-change |
 | `push:last` | last push summary (dashboard) | on-change + hourly |
@@ -491,8 +494,10 @@ Worker deploy: `. ./cf-env.ps1` (sets `CLOUDFLARE_API_TOKEN`) then
 
 ## 12. Known limitations & roadmap
 
-- **KV write budget** is the structural fragility → **D1 (SQLite)** migration is
-  the planned move (100k writes/day free; enables reports-at-scale + thermal).
+- **KV write budget** is the structural fragility. The `*/1` EEW cron is kept
+  inside the free tier by write-on-change snapshot updates plus a 10-minute
+  freshness heartbeat, but **D1 (SQLite)** migration remains the planned move
+  (100k writes/day free; enables reports-at-scale + thermal).
 - **True pre-event EEW is not possible** with public catalog latency. The current
   earthquake feature is an honest S-wave arrival estimate for far-field wilayas,
   not a guaranteed pre-shake warning.
