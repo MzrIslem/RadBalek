@@ -1,0 +1,20 @@
+v1.2.2 — Nouvelle source d'alertes crues, meilleur suivi des crises
+
+**Nouveau : alertes de crues GDACS (JRC Commission européenne)**
+- Une source indépendante et mondiale surveille maintenant les grandes crues touchant l'Algérie
+- Alerte orange avec délai de préavis — utile pour les wilayas traversées par de grands bassins
+- Toujours plafonnée au niveau orange : une confirmation officielle (ONM/Protection Civile) reste nécessaire pour passer au rouge
+
+**Crises longues mieux suivies**
+- Pendant une crise rouge de plusieurs jours, l'application vous rappelle désormais la vigilance jusqu'à 72 heures (au lieu de 12)
+
+**Sources presse élargies**
+- Le Soir d'Algérie et Echorouk rejoignent TSA et Ennahar — meilleure couverture du centre et du sud
+
+**Fiabilité & confidentialité**
+- Feux : passage aux satellites NOAA-20/21 + MODIS (fin de vie du satellite Suomi NPP prévue le 1er novembre 2026)
+- Les scores de risque météo par wilaya fonctionnent de nouveau
+- Diverses sécurisations du traitement des flux d'information
+- Le cache hors-ligne est protégé contre les données anormalement volumineuses
+
+Pas un service officiel. En cas d'urgence, appelez la Protection Civile : 14 ou 1021.
