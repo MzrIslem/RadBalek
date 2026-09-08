@@ -15,11 +15,26 @@ const SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 const MAX_SENDS_PER_CYCLE = 30;
 const SENT_TTL_MS = 3 * 24 * 3600 * 1000;
 
-// Crisis heartbeat: while a RED alert is active, re-notify its topics every
-// 3h with a rotating recommendation (max 4 heartbeats). Orange channel —
-// present without re-piercing DND; the initial red already did.
-const HB_INTERVAL_MS = 3 * 3600 * 1000;
-const HB_MAX = 4;
+// Crisis heartbeat: while a RED alert is active, re-notify its topics with a
+// rotating recommendation. Adaptive schedule (v2): fast 3h slots for the first
+// 12h (age <3h = too soon → 0; 3h/6h/9h → slots 1-3), then slow 6h slots
+// through 72h (12h→slot 4 … 66h→slot 13), so multi-day red crises keep
+// heart-beating while still live instead of going silent after 12h. Past 72h
+// → -1 (stop: either the alert has lapsed or users need quiet, not
+// repetition). Orange channel — present without re-piercing DND; the
+// initial red already did.
+const HB_H3 = 3 * 3600 * 1000;
+const HB_H6 = 6 * 3600 * 1000;
+const HB_H72 = 72 * 3600 * 1000;
+export function hbSlot(ageMs) {
+  if (ageMs < HB_H3) return 0;
+  // Past 72h: stop — either the alert has lapsed or users need quiet.
+  if (ageMs >= HB_H72) return -1;
+  if (ageMs < 12 * 3600 * 1000) return Math.floor(ageMs / HB_H3); // slots 1-3
+  // Slots 4-13 begin at 12h, 18h, … 66h — the last heartbeat lands within
+  // the 66-72h window, so coverage is strictly THROUGH 72h.
+  return 4 + Math.floor((ageMs - 12 * 3600 * 1000) / HB_H6);
+}
 const HB_RECS = {
   heat: [
     ["Buvez de l'eau régulièrement, même sans soif", "اشرب الماء بانتظام حتى دون عطش"],
@@ -250,8 +265,8 @@ export async function sendPush(env, notifications, alerts, errors = [], onmEntri
     if (summary.sent + summary.heartbeats >= MAX_SENDS_PER_CYCLE) break;
     if (a.color !== "red" || !a.onset) continue;
     if (a.expires && Date.parse(a.expires) < now) continue;
-    const slot = Math.floor((now - Date.parse(a.onset)) / HB_INTERVAL_MS);
-    if (slot < 1 || slot > HB_MAX) continue;
+    const slot = hbSlot(now - Date.parse(a.onset));
+    if (slot < 1) continue; // 0 = under 3h (initial push just went), -1 = past 72h
     const recs = HB_RECS[a.hazard] || HB_RECS.other;
     const [recFr, recAr] = recs[(slot - 1) % recs.length];
     for (const w of a.wilayas) {

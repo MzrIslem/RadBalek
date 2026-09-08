@@ -2,6 +2,7 @@
 // request over wilaya centroids, cached 30 min in KV. Serves /v1/weather.json
 // for the app's map layers: temperature, wind speed, humidity, feels-like.
 import { fwiSeries } from "./fwi.js";
+import { notifyAdmin } from "./watchdog.js";
 
 // FFMC/DMC/DC are cumulative, so the index needs a run-up before it means
 // anything. 14 days from the standard startup values is enough for FFMC and
@@ -46,11 +47,20 @@ export async function handleWeather(env, geo) {
     fetch(url, { headers: { "user-agent": "radbalek/0.1" } }),
     fetch(aqUrl, { headers: { "user-agent": "radbalek/0.1" } }).catch(() => null),
   ]);
-  if (!res.ok) return new Response('{"error":"upstream"}', { status: 502, headers: { "access-control-allow-origin": "*" } });
+  if (!res.ok) {
+    // v2: weather was the only source with no watchdog coverage — a dead
+    // Open-Meteo served 502s silently. Same 1h-cooldown gate as the cron
+    // detectors (wd:weather); awaited so the FCM send survives the return.
+    await notifyAdmin(env, "weather", "⚠️ Rad Balek — météo en panne",
+      `Open-Meteo répond ${res.status} — /v1/weather.json sert une erreur.`);
+    return new Response('{"error":"upstream"}', { status: 502, headers: { "access-control-allow-origin": "*" } });
+  }
   let data;
   try {
     data = await res.json();
   } catch {
+    await notifyAdmin(env, "weather", "⚠️ Rad Balek — météo en panne",
+      "Réponse Open-Meteo illisible — /v1/weather.json sert une erreur.");
     return new Response('{"error":"upstream body"}', { status: 502, headers: { "access-control-allow-origin": "*" } });
   }
   const arr = Array.isArray(data) ? data : [data];

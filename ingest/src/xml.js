@@ -35,8 +35,29 @@ export function decodeEntities(s) {
     .replace(/&quot;/g, '"')
     .replace(/&#0?39;|&apos;/g, "'")
     .replace(/&([a-zA-Z]+);/g, (m, name) => (name in NAMED ? NAMED[name] : m))
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    // One malformed numeric entity must not crash decodeEntities:
+    // String.fromCodePoint throws RangeError above 0x10FFFF, which used to
+    // kill the WHOLE source (tag() calls this on every item). XML also
+    // forbids &#0; — fromCodePoint(0) returns a NUL char, so return the raw
+    // entity text for it too. Never throw.
+    .replace(/&#(\d+);/g, (m, n) => {
+      const cp = Number(n);
+      if (cp === 0) return m;
+      try {
+        return String.fromCodePoint(cp);
+      } catch {
+        return m;
+      }
+    })
+    .replace(/&#x([0-9a-fA-F]+);/g, (m, n) => {
+      const cp = parseInt(n, 16);
+      if (cp === 0) return m;
+      try {
+        return String.fromCodePoint(cp);
+      } catch {
+        return m;
+      }
+    })
     .replace(/&amp;/g, "&");
 }
 

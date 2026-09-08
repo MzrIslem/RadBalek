@@ -1,10 +1,12 @@
 // NASA FIRMS active-fire hotspots (VIIRS 375m + MODIS 1km) over Algeria.
 // Free MAP_KEY: https://firms.modaps.eosdis.nasa.gov/api/map_key/
 // Quota: 5000 transactions / 10 min. NRT latency for Algeria ~1-3h per overpass.
+// S-NPP VIIRS was dropped 2026-09: NASA/NESDIS ends ALL S-NPP product delivery
+// on 2026-11-01 (satellite retired); NOAA-20/21 VIIRS + MODIS carry coverage.
 
 const DZ_BBOX = "-8.7,18.9,12.0,37.3"; // west,south,east,north
 
-export const FIRMS_SOURCES = ["VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT", "MODIS_NRT"];
+export const FIRMS_SOURCES = ["VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT", "MODIS_NRT"];
 
 // FIRMS `day_range` counts back from the CURRENT UTC date, not from the latest
 // date that actually has data. NRT for "today" only appears a few hours into

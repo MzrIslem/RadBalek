@@ -18,11 +18,14 @@ import { hazardFromEvent } from "../src/capfeed.js";
 import { severityColor, fcmTopicsFor } from "../src/normalize.js";
 import { makeWilayaResolver } from "../src/geo.js";
 import { fwiClass } from "../src/fwi.js";
-import { fetchFirmsHotspots, withinLastHours, FIRMS_DAY_RANGE } from "../src/firms.js";
+import { fetchFirmsHotspots, withinLastHours, FIRMS_DAY_RANGE, FIRMS_SOURCES } from "../src/firms.js";
 import { detectEew, feltRadiusKm, haversineKm } from "../src/quakes.js";
 import { adminAuthed } from "../src/auth.js";
-import { handleRisk } from "../src/ai.js";
+import { handleRisk, geminiGenerate } from "../src/ai.js";
 import { handleTestPush } from "../src/admin.js";
+import { hbSlot } from "../src/push.js";
+import { decodeEntities } from "../src/xml.js";
+import { parseGdacs, fetchGdacs } from "../src/gdacs.js";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const geo = JSON.parse(readFileSync(join(__dir, "..", "data", "wilayas.json"), "utf8"));
@@ -101,9 +104,19 @@ test("FIRMS: never asks for day_range=1 (the nightly blank-fire-map bug)", async
     asked.push(url);
     return { ok: true, text: async () => "" };
   };
-  await fetchFirmsHotspots("KEY", { fetchFn, sources: ["VIIRS_SNPP_NRT"] });
+  await fetchFirmsHotspots("KEY", { fetchFn, sources: ["VIIRS_NOAA21_NRT"] });
   assert.equal(asked.length, 1);
   assert.ok(asked[0].endsWith(`/${FIRMS_DAY_RANGE}`), `requested "${asked[0]}" — day_range must be ${FIRMS_DAY_RANGE}`);
+});
+
+test("FIRMS: VIIRS_SNPP_NRT is gone before the 2026-11-01 S-NPP sunset", () => {
+  // NASA/NESDIS ends ALL S-NPP product delivery on 2026-11-01. Keeping the
+  // source would waste a subrequest + log an error every cycle forever after.
+  assert.ok(!FIRMS_SOURCES.includes("VIIRS_SNPP_NRT"), "S-NPP must be dropped");
+  assert.equal(FIRMS_SOURCES.length, 3, "NOAA-20 + NOAA-21 VIIRS + MODIS remain");
+  assert.ok(FIRMS_SOURCES.includes("VIIRS_NOAA20_NRT"), "NOAA-20 remains");
+  assert.ok(FIRMS_SOURCES.includes("VIIRS_NOAA21_NRT"), "NOAA-21 remains");
+  assert.ok(FIRMS_SOURCES.includes("MODIS_NRT"), "MODIS remains");
 });
 
 test("withinLastHours: clips the 2-day fetch, keeps undateable rows", () => {
@@ -250,4 +263,136 @@ test("handleTestPush: IP and token rate limits reject before FCM send", async ()
 
   assert.equal((await handleTestPush(req(), env({ ip: 12, token: 0 }), null)).status, 429);
   assert.equal((await handleTestPush(req(), env({ ip: 0, token: 3 }), null)).status, 429);
+});
+
+// --- v2 additions -----------------------------------------------------------
+
+const H = 3600 * 1000;
+
+test("hbSlot: adaptive heartbeat ladder — 3h fast, then 6h slow through 72h", () => {
+  // Multi-day red crises used to lose heartbeats entirely once past 12h
+  // (4 slots x 3h). v2: slots 1-3 at 3h (ages 3/6/9h), slots 4-13 on a 6h
+  // cadence from 12h (last begins 66h — coverage strictly through 72h),
+  // -1 at/after 72h. Slots 1-3 keep the SAME numbering as the old scheme so
+  // in-flight KV hb: keys stay valid.
+  assert.equal(hbSlot(2.9 * H), 0, "under 3h: too soon (initial push just went)");
+  assert.equal(hbSlot(3 * H), 1);
+  assert.equal(hbSlot(6 * H), 2);
+  assert.equal(hbSlot(9 * H), 3);
+  assert.equal(hbSlot(11.9 * H), 3, "still in slot 3 before 12h");
+  assert.equal(hbSlot(12 * H), 4, "12h starts the slow cadence");
+  assert.equal(hbSlot(13 * H), 4, "slot 4 spans 12-18h");
+  assert.equal(hbSlot(66 * H), 13, "last slot begins at 66h");
+  assert.equal(hbSlot(71.9 * H), 13, "still slot 13 right before 72h");
+  assert.equal(hbSlot(72 * H), -1, "at 72h: stop heartbeating");
+  assert.equal(hbSlot(73 * H), -1, "past 72h: stop heartbeating");
+});
+
+test("decodeEntities: single-decode pinned, malformed codepoints never throw", () => {
+  // The &amp;-last order is CORRECT (single decode). What actually crashed
+  // whole sources pre-v2: String.fromCodePoint RangeError on &#0; /
+  // &#x110000; — one malformed entity in a feed killed the source's parse.
+  assert.equal(decodeEntities("&amp;lt;"), "&lt;", "single decode, not double");
+  assert.equal(decodeEntities("&#65;"), "A");
+  assert.equal(decodeEntities("&amp;eacute;"), "&eacute;", "single decode of named");
+  assert.equal(decodeEntities("&#0;"), "&#0;", "invalid codepoint: raw, no throw");
+  assert.equal(decodeEntities("&#x110000;"), "&#x110000;", "out of range hex: raw, no throw");
+  assert.equal(decodeEntities("caf&#xe9;"), "café", "hex accent decodes");
+});
+
+test("geminiGenerate: thinkingBudget:0 only for non-lite models (the lite 400)", async () => {
+  // TECHNICAL.md runbook gotcha: flash-LITE models hard-reject
+  // thinkingConfig.thinkingBudget:0 with a 400. v2 guards at the boundary:
+  // noThinking:true keeps expressing intent, but lite models never get the
+  // config. Captured via fetch monkey-patch; restored in finally.
+  const realFetch = globalThis.fetch;
+  const seen = [];
+  globalThis.fetch = async (url, init) => {
+    seen.push(JSON.parse(init.body));
+    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: "ok" }] } }] }) };
+  };
+  try {
+    const env = { GEMINI_API_KEY: " test " };
+    await geminiGenerate(env, { contents: [], noThinking: true, model: "gemini-flash-lite-latest" });
+    assert.ok(!("thinkingConfig" in seen[0].generationConfig), "lite model must NOT get thinkingConfig");
+    await geminiGenerate(env, { contents: [], noThinking: true, model: "gemini-2.5-flash" });
+    assert.ok("thinkingConfig" in seen[1].generationConfig, "full model gets thinkingConfig");
+    assert.equal(seen[1].generationConfig.thinkingConfig.thinkingBudget, 0);
+    await geminiGenerate(env, { contents: [], noThinking: false, model: "gemini-2.5-flash" });
+    assert.ok(!("thinkingConfig" in seen[2].generationConfig), "noThinking:false never sends it");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("parseGdacs: FL-only, orange-max, DZ-bbox, iscurrent string, wilaya fallback", () => {
+  const resolve = makeWilayaResolver(geo);
+  const feature = (over) => ({
+    bbox: over.bbox,
+    geometry: { type: "Point", coordinates: over.coords },
+    properties: {
+      eventtype: over.type, eventid: over.eventid ?? "1104081", episodeid: over.episodeid ?? "17",
+      alertlevel: over.level, iscurrent: over.iscurrent ?? "true",
+      fromdate: over.from ?? "2026-09-05T01:00:00", todate: over.to ?? "2026-09-10T01:00:00",
+      name: over.name ?? "Flood in Algeria",
+      url: { report: "https://www.gdacs.org/report" },
+    },
+  });
+  // (lon, lat) GeoJSON order; point inside Alger, bbox across northern DZ.
+  const orangeFlood = feature({ type: "FL", level: "Orange", coords: [3.05, 36.75], bbox: [1, 35, 5, 37.5] });
+  const redFlood = feature({ type: "FL", level: "Red", coords: [3.05, 36.75], bbox: [1, 35, 5, 37.5], eventid: "999" });
+  const greenFlood = feature({ type: "FL", level: "Green", coords: [3.05, 36.75], bbox: [1, 35, 5, 37.5], eventid: "888" });
+  const drought = feature({ type: "DR", level: "Red", coords: [3.05, 36.75], bbox: [1, 35, 5, 37.5], eventid: "777" });
+  const farAway = feature({ type: "FL", level: "Orange", coords: [12, 12], bbox: [11, 11, 13, 13], eventid: "666" });
+  const notCurrent = feature({ type: "FL", level: "Orange", coords: [3.05, 36.75], bbox: [1, 35, 5, 37.5], eventid: "555", iscurrent: "false" });
+  const offshore = feature({ type: "FL", level: "Orange", coords: [4.0, 37.6], bbox: [1, 35, 5, 38], eventid: "444" });
+
+  const { alerts, incidents } = parseGdacs({ features: [orangeFlood, redFlood, greenFlood, drought, farAway, notCurrent, offshore] }, resolve);
+  // 3 alerts: the Orange FL, the Red FL (capped to orange — still a pushable
+  // orange alert), and the offshore Orange FL (rescued by the 1.5deg
+  // fallback). Green → incident; DR/far/iscurrent:"false" → nothing.
+  assert.equal(alerts.length, 3, "orange + red-capped + offshore-rescued all alert");
+  assert.equal(incidents.length, 1, "green becomes an incident pin only");
+  const a = alerts[0];
+  assert.equal(a.id, "gdacs:FL:1104081:17");
+  assert.equal(a.color, "orange", "GDACS alert colour is always our orange");
+  assert.equal(a.hazard, "flood");
+  assert.equal(a.class, "alert");
+  assert.equal(a.onset, "2026-09-05T01:00:00.000Z", "GDACS no-Z dates parsed as UTC");
+  assert.equal(a.expires, "2026-09-10T01:00:00.000Z");
+  assert.equal(a.wilayas.length, 1);
+  assert.ok(a.headline.fr.includes("Inondation"), "fr headline");
+  assert.ok(a.headline.ar.includes("فيضان"), "ar headline");
+  // Red GDACS is capped to orange (never our red) — separate alert object.
+  const red = parseGdacs({ features: [redFlood] }, resolve).alerts[0];
+  assert.equal(red.color, "orange", "GDACS Red capped to our orange");
+  assert.equal(red.id, "gdacs:FL:999:17", "event id in the alert id");
+  // Green → incident pin, no push.
+  const g = parseGdacs({ features: [greenFlood] }, resolve);
+  assert.equal(g.alerts.length, 0);
+  assert.equal(g.incidents.length, 1);
+  assert.equal(g.incidents[0].hazard, "flood");
+  // Non-FL skipped entirely.
+  assert.equal(parseGdacs({ features: [drought] }, resolve).alerts.length + parseGdacs({ features: [drought] }, resolve).incidents.length, 0);
+  // Out-of-DZ bbox skipped.
+  assert.equal(parseGdacs({ features: [farAway] }, resolve).alerts.length, 0);
+  // iscurrent:"false" skipped (STRING compare — "false" truthy traps).
+  assert.equal(parseGdacs({ features: [notCurrent] }, resolve).alerts.length, 0);
+  // Offshore orange FL point: resolver 1.5deg fallback rescues it into an alert.
+  const off = parseGdacs({ features: [offshore] }, resolve);
+  assert.equal(off.alerts.length, 1, "offshore basin point resolves via 1.5deg fallback");
+  assert.equal(off.alerts[0].wilayas.length, 1, "rescued to a real wilaya");
+});
+
+test("fetchGdacs: window is ±7d around now, iscurrent query not needed", async () => {
+  const asked = [];
+  const fetchFn = async (url) => {
+    asked.push(url);
+    return { ok: true, json: async () => ({ features: [] }) };
+  };
+  await fetchGdacs({ fetchFn, now: () => new Date("2026-09-08T12:00:00Z") });
+  assert.equal(asked.length, 1);
+  assert.ok(asked[0].includes("fromDate=2026-09-01"), asked[0]);
+  assert.ok(asked[0].includes("toDate=2026-09-15"), asked[0]);
+  assert.ok(asked[0].includes("SEARCH"), asked[0]);
 });

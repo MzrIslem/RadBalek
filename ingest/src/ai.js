@@ -10,8 +10,11 @@ const json = (o, s = 200) =>
 export async function geminiGenerate(env, { system, contents, maxTokens = 400, temperature = 0.4, noThinking = false, model = MODEL }) {
   const cfg = { temperature, maxOutputTokens: maxTokens };
   // gemini-flash-latest (2.5) "thinks" first, eating tiny token budgets — kill
-  // it for short deterministic tasks like classification.
-  if (noThinking) cfg.thinkingConfig = { thinkingBudget: 0 };
+  // it for short deterministic tasks like classification. BUT the LITE models
+  // hard-reject thinkingBudget:0 with a 400 (see TECHNICAL.md §5.9), so only
+  // send it for full-flash models. noThinking:true stays as the intent marker;
+  // the model check here is the guard.
+  if (noThinking && !/lite/i.test(model)) cfg.thinkingConfig = { thinkingBudget: 0 };
   const body = { contents, generationConfig: cfg };
   if (system) body.systemInstruction = { parts: [{ text: system }] };
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {

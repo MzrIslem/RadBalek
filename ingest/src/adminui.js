@@ -71,8 +71,12 @@ let GH={at:0,data:null};
 function setTab(t){TAB=t;localStorage.setItem("rb_admin_tab",t);boot()}
 // Key travels in the Authorization header only — never in the URL.
 const auth=()=>({headers:{authorization:"Bearer "+KEY}});
-const esc=s=>String(s==null?"":s).replace(/</g,"&lt;");
-const attr=s=>String(s==null?"":s).replace(/"/g,"&quot;");
+// v2: full context escaping (& < > " '). Single regex pass — the &amp; this
+// pass emits can never be re-escaped by it, and every call site passes values
+// through esc() exactly once, so no double-encode artifacts. Escapes " and '
+// too, which makes it safe for attribute contexts (attr == esc since v2).
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const attr=s=>esc(s);
 function ago(iso){if(!iso)return"—";const m=Math.round((Date.now()-Date.parse(iso))/60000);
   if(m<1)return"à l’instant";if(m<60)return"il y a "+m+" min";if(m<48*60)return"il y a "+Math.round(m/60)+" h";return"il y a "+Math.round(m/1440)+" j"}
 function saveKey(){KEY=document.getElementById("key").value.trim();localStorage.setItem("rb_admin_key",KEY);boot()}
@@ -118,7 +122,7 @@ function paintOverview(o,hist){
     '<span class="pill">📨 push: <b>'+(p.sent==null?"–":p.sent)+'</b> · '+(p.at?ago(p.at):"jamais")+(p.fatal?' · <span class="err">panne</span>':"")+'</span>'+
     '<span class="pill">🤖 IA '+ck(cfg.gemini)+' · 📨 FCM '+ck(cfg.push)+' · 🛰️ FIRMS '+ck(cfg.firms)+'</span>';
   const errFor=n=>{const e=(o.errors||[]).find(x=>x.source===n);return e?e.error:null};
-  const KNOWN=["onm","firms","dgpc-telegram","dgpc-web","usgs","craag","press"];
+  const KNOWN=["onm","firms","dgpc-telegram","dgpc-web","usgs","craag","press","gdacs"];
   const rows=[
     ["onm","🌡️ Météo Algérie (ONM)",(st.onmEntries||0)+" entrées · "+(st.activeAlerts||0)+" vigilances actives"],
     ["firms","🛰️ NASA FIRMS",st.firmsSkipped?"clé absente":((st.fireClusters||0)+" foyers détectés")],
@@ -126,7 +130,8 @@ function paintOverview(o,hist){
     ["dgpc-web","🏛️ Protection Civile (dgpc.dz)",(st.dgpcWebPosts||0)+" articles"],
     ["usgs","🌍 Séismes (EMSC/USGS)",((src.usgs&&src.usgs.count)||0)+" séismes"+(src.usgs&&src.usgs.newest?" · dernier "+ago(src.usgs.newest):"")],
     ["craag","🇩🇿 CRAAG",(st.craagRows||0)+" lignes"],
-    ["press","📰 Presse algérienne",(st.pressItems||0)+" articles"]
+    ["press","📰 Presse algérienne",(st.pressItems||0)+" articles"],
+    ["gdacs","🌊 GDACS (JRC)",(st.gdacsEvents||0)+" événements crues"]
   ].map(r=>{const e=errFor(r[0]);
     return '<div style="margin-top:8px"><div class="t1" style="font-size:13px">'+(e?"🔴 ":"🟢 ")+r[1]+
       '</div><div class="t2">'+(e?'<span class="err">'+esc(e).slice(0,220)+"</span>":r[2])+"</div></div>"}).join("");
@@ -257,7 +262,7 @@ function paint(reports,snap,push){
     '<div class="card"><div class="row"><div class="tx">'+
     '<div class="t1">'+(CATS[r.category]||r.category)+' — '+(NAMES[r.wilaya]||("W"+(r.wilaya||"?")))+'</div>'+
     '<div class="t2">'+new Date(r.at).toLocaleString("fr")+(r.lat?' · '+r.lat.toFixed(3)+","+r.lon.toFixed(3):"")+
-    (r.description?'<br>« '+r.description.replace(/</g,"&lt;")+' »':"")+
+    (r.description?'<br>« '+esc(r.description)+' »':"")+
     ' · 👍 '+(r.confirms||0)+'</div>'+
     '<span class="st s-'+r.status+'">'+r.status+'</span>'+
     ((r.status!=="verified"&&r.status!=="rejected")?

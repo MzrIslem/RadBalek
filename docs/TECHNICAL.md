@@ -86,6 +86,7 @@ algeria-ews/
 │     ├─ news.js                   # Algerian press RSS (TSA, Ennahar)
 │     ├─ quakes.js                 # EMSC (primary) -> USGS (fallback)
 │     ├─ craag.js                  # CRAAG official quake authority (enrichment)
+│     ├─ gdacs.js                 # GDACS (JRC) big-basin flood alerts (v2)
 │     ├─ weather.js                # Open-Meteo temp/wind/AQI + FWI fire risk
 │     ├─ fwi.js                    # Canadian FWI (CFFWIS) computation
 │     ├─ geo.js                    # point-in-polygon wilaya resolver, clustering
@@ -128,12 +129,13 @@ algeria-ews/
 | Source | Module | Role | Notes / quirks |
 |---|---|---|---|
 | **ONM** (Office National de la Météorologie) | `capfeed.js` | **Official vigilance** (the only source that pushes loud alerts) | CAP v1.2 Atom feed. Hazards: heat/storm/wind/sandstorm/flood/cold/**other**. Severity Moderate/Severe/Extreme → yellow/orange/red. |
-| **NASA FIRMS** | `firms.js` | Satellite fire hotspots (VIIRS 375 m + MODIS 1 km) | CSV; `confidence` filter (VIIRS l/n/h, MODIS 0-100). **Missing confidence = unknown, not 0** (a bug once dropped 100% of fires). Fetches 4 sensors in parallel, 18 s abort. |
+| **NASA FIRMS** | `firms.js` | Satellite fire hotspots (VIIRS 375 m + MODIS 1 km) | CSV; `confidence` filter (VIIRS l/n/h, MODIS 0-100). **Missing confidence = unknown, not 0** (a bug once dropped 100% of fires). 3 sensors in parallel (NOAA-20/21 VIIRS + MODIS), 18 s abort. **S-NPP VIIRS dropped 2026-09** — NASA/NESDIS ends all S-NPP delivery on 2026-11-01; NOAA-20/21 carry the VIIRS coverage. |
 | **DGPC Telegram** | `telegram.js` | Protection Civile field sitreps (fires, road crashes) | Scrape of t.me/@DGPCDZ. |
 | **dgpc.dz** | `dgpcweb.js` | Resilience path for the Telegram scrape | WordPress REST `/wp-json/wp/v2/posts`; needs a browser UA (WAF 403s bare UA); sits behind Cloudflare (occasional 522 → 2 retries + RSS fallback). |
-| **Algerian press** | `news.js` | Hazard classes official feeds miss (floods in progress, road closures, collapses) | RSS (TSA, Ennahar). Marked **NON OFFICIEL**. |
+| **Algerian press** | `news.js` | Hazard classes official feeds miss (floods in progress, road closures, collapses) | RSS (TSA, Ennahar, Le Soir, Echorouk — v2 added the latter two for central/south + Arabic coverage; El Watan's RSS is dead). Arabic articles place via Arabic wilaya matching. Marked **NON OFFICIEL**. |
 | **EMSC/USGS** | `quakes.js` | Earthquakes | EMSC primary, USGS fallback. M≥4.5 + <6 h + a resolvable wilaya → **red push**. Onset quantised to the minute (EMSC/USGS differ by seconds → avoids double-siren). Fresh quakes (≤10 min) also get an honest S-wave arrival estimate for up to 8 positive-lead wilayas. |
 | **CRAAG** | `craag.js` | Official national quake authority | **Lags days-to-weeks** — enrichment only (official magnitude + the wilaya name EMSC omits), never an alert trigger. |
+| **GDACS** (JRC-CEC) | `gdacs.js` | **v2**: GLOFAS big-basin river-flood alerts (corroborating) | GeoJSON events API (no auth). **FL only**; Orange/Red → our **orange** (orange-max — a foreign model never pierces DND on its own say-so); Green or unplaceable → incident pin. Big-basin ≠ flash floods in wadis (see dead-ends). EQ/TC skipped — duplicates EMSC / ONM vigilance. `iscurrent` is the *string* `"true"`. |
 | **Open-Meteo** | `weather.js` | Temp, feels-like, wind, humidity, AQI, 48 h forecast, **FWI inputs** | CC BY 4.0. |
 | **Copernicus EFFIS** | (worker rasters) | Fire Weather Index raster + burnt areas | WMS layers `mf010.fwi` and `modis.ba`. MapServer returns errors as HTTP 200 + HTML → **PNG magic-byte validation** on both fetch and cache read. |
 
@@ -217,9 +219,11 @@ Delivery cycle:
    sent + deduped, **not** intent) vs `activetopics`. **Skipped entirely on a
    degraded cycle** (ONM failed/empty) so an upstream blip can't tell every
    wilaya "it's over" mid-emergency. Un-sent all-clears carry forward.
-5. **3-hourly crisis heartbeat** for still-active reds (`kind:"heartbeat"`,
-   non-intrusive orange channel). Native gates on `kind` so it never re-fires the
-   full siren.
+5. **Adaptive crisis heartbeat** for still-active reds (`kind:"heartbeat"`,
+   non-intrusive orange channel): 3-hourly for the first 12 h, then 6-hourly
+   up to 72 h (v2 — was a hard max of 4 × 3 h = 12 h, which went silent on
+   multi-day crises while they were still live). Native gates on `kind` so it
+   never re-fires the full siren.
 6. **OAuth token** (`getAccessToken`) cached in KV ~55 min; invalidated on FCM
    401/403.
 
@@ -231,6 +235,9 @@ Dead-man alerts to the maintainer via FCM topic `admin` (subscribed by turning o
   errors), or ONM-parsed-but-zero-alerts (markup drift).
 - `watchStale` — `/v1/alerts.json` snapshot older than ~35 min (fires on a cache
   miss). Reports over the orange channel (not the red siren).
+- `notifyAdmin` (exported since v2) — shared gate used by the fetch path too:
+  `weather.js` reports Open-Meteo outages (wd:weather) — weather was the only
+  source with zero watchdog coverage before v2.
 
 ### 5.6 Storage — Workers KV (the binding constraint)
 
@@ -487,8 +494,10 @@ Worker deploy: `. ./cf-env.ps1` (sets `CLOUDFLARE_API_TOKEN`) then
 - **Force a collect:** `POST /v1/admin/refresh` (no push — pushes stay cron-only).
 - **Known gotchas:** wrangler inline-JSON quote stripping (use `--path`); Firebase
   multi-line notes (use `--release-notes-file`); GitHub release needs the `gho_`
-  token; APK upload cut → `curl --retry`; Gemini `noThinking` 400s the lite model;
-  the device USB drops off intermittently.
+  token; APK upload cut → `curl --retry`; Gemini `noThinking` 400s the lite model
+  (since v2 the guard lives in `geminiGenerate` — `thinkingBudget:0` is only sent
+  for non-lite models, so `noThinking:true` is safe to request everywhere); the
+  device USB drops off intermittently.
 
 ---
 
@@ -498,9 +507,19 @@ Worker deploy: `. ./cf-env.ps1` (sets `CLOUDFLARE_API_TOKEN`) then
   inside the free tier by write-on-change snapshot updates plus a 10-minute
   freshness heartbeat, but **D1 (SQLite)** migration remains the planned move
   (100k writes/day free; enables reports-at-scale + thermal).
+- **Deferred to the D1 migration (v2 debate outcome):** the public
+  `GET /v1/reports.json` still fans out one KV read per report (list + N gets,
+  edge-cached 600 s) and cannot page past 100 — a materialized feed in D1
+  fixes both; and the all-clear diff is cycle-intent-based, not per-device,
+  so a red expiring during a token-stale/partial-outage window can
+  false-clear a still-live red (the degraded-cycle guard covers the ONM
+  outage case; per-device delivery state needs D1).
 - **True pre-event EEW is not possible** with public catalog latency. The current
   earthquake feature is an honest S-wave arrival estimate for far-field wilayas,
   not a guaranteed pre-shake warning.
+- **GDACS FL is big-basin only.** Flash floods in small wadis — the floods that
+  actually kill in Algeria — remain uncovered (GLOFAS dead-end, see §4); GDACS
+  adds the river-flood corroborating layer, orange-max, on top.
 - **`/v1/test-push` is public** for device self-test; it can trigger a red siren
   path. It is now rate-limited per IP and per token, but a stronger device
   pairing/auth model is still the clean production fix.

@@ -16,7 +16,9 @@ const ADMIN_TOPIC = "admin";
 const COOLDOWN_S = 3600;
 const STALE_MS = 35 * 60 * 1000; // cron is every 10 min — 35 means it missed 3
 
-async function notifyAdmin(env, kind, title, body) {
+// Exported since v2: weather.js (fetch path) reports Open-Meteo outages
+// through the same 1h-cooldown gate instead of its own ad-hoc one.
+export async function notifyAdmin(env, kind, title, body) {
   if (!env.FIREBASE_SA) return false;
   const flag = `wd:${kind}`;
   try {
@@ -66,7 +68,7 @@ export async function watchPipeline(env, snap, pushSummary) {
         `La source officielle ONM échoue : ${e && e.error ? e.error : "erreur inconnue"}`);
     } else if (names.length >= 4) {
       await notifyAdmin(env, "sources", "⚠️ Rad Balek — sources en panne",
-        `${names.length}/7 sources échouent : ${names.join(", ")}`);
+        `${names.length}/8 sources échouent : ${names.join(", ")}`);
     }
     // A cycle where EVERY send failed does not throw — sendPush returns
     // normally with a populated errors[] and no `fatal`, so this was completely

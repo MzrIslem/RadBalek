@@ -9,6 +9,7 @@ import { fetchNews } from "./news.js";
 import { fetchCraag, enrichQuakes } from "./craag.js";
 import { fetchFirmsHotspots, significantHotspots } from "./firms.js";
 import { fetchQuakes } from "./quakes.js";
+import { fetchGdacs, parseGdacs } from "./gdacs.js";
 import { makeWilayaResolver, clusterHotspots, inFlareZone } from "./geo.js";
 import { normalizeOnm, normalizeFireCluster, normalizeDgpcIncident, fcmTopicsFor } from "./normalize.js";
 import { geminiRiskScore } from "./ai.js";
@@ -29,8 +30,9 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
     T(fetchDgpcWeb(fetchFn), 8000, "dgpc-web"),
     T(fetchNews(fetchFn), 8000, "news"),
     T(fetchCraag(fetchFn), 8000, "craag"),
+    T(fetchGdacs({ fetchFn }), 8000, "gdacs"),
   ]);
-  const [onmR, dgpcR, firmsR, quakesR, dgpcWebR, newsR, craagR] = settled;
+  const [onmR, dgpcR, firmsR, quakesR, dgpcWebR, newsR, craagR, gdacsR] = settled;
   const grab = (r, name, fallback) => {
     if (r.status === "fulfilled") return r.value;
     errors.push({ source: name, error: String(r.reason) });
@@ -43,6 +45,7 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
   const dgpcWeb = grab(dgpcWebR, "dgpc-web", []);
   const news = grab(newsR, "press", []);
   const craagRows = grab(craagR, "craag", []);
+  const gdacsJson = grab(gdacsR, "gdacs", null);
   // CRAAG lags days — never an alert trigger, only official confirmation +
   // the wilaya name that EMSC never provides.
   const quakes = enrichQuakes(grab(quakesR, "usgs", []), craagRows);
@@ -235,6 +238,13 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
     });
   }
 
+  // --- GDACS floods (UNOFFICIAL, corroborating) — GLOFAS big-basin river
+  // floods from the JRC. Orange-max: even a GDACS Red stays our orange.
+  // Quakes/cyclones are skipped (duplicates EMSC / ONM vigilance).
+  const gdacs = gdacsJson ? parseGdacs(gdacsJson, resolveWilaya) : { alerts: [], incidents: [] };
+  for (const a of gdacs.alerts) alerts.push(a);
+  for (const i of gdacs.incidents) incidents.push(i);
+
   // --- AI Predictive Risk Scoring (optional, runs if GEMINI_API_KEY set) ---
   // Build context from all sources for the risk engine.
   let riskScores = null;
@@ -253,7 +263,8 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
     generatedAt: nowIso,
     attribution:
       "Alerts: Office National de la Météorologie (CC BY 4.0) · Incidents: NASA FIRMS, " +
-      "Protection Civile Algérienne (dgpc.dz), CRAAG, EMSC · Presse: TSA, Ennahar (non officiel)",
+      "Protection Civile Algérienne (dgpc.dz), CRAAG, EMSC, GDACS (JRC-CEC) · Presse: TSA, Ennahar, " +
+      "Le Soir, Echorouk (non officiel)",
     stats: {
       onmEntries: onm.length,
       activeAlerts: alerts.length,
@@ -263,6 +274,7 @@ export async function runPipeline({ firmsMapKey = null, wilayasGeojson = null, f
       dgpcWebPosts: dgpcWeb.length,
       pressItems: news.length,
       craagRows: craagRows.length,
+      gdacsEvents: gdacs.alerts.length + gdacs.incidents.length,
       dgpcSitrep: latestSitrep ? { postedAt: latestSitrep.postedAt, ...latestSitrep.stats } : null,
       firmsSkipped: firms.skipped || false,
       fireClusters: clusters.length,

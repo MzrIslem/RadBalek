@@ -10,19 +10,33 @@
 // rendered with the "non officiel" badge — it never triggers a red alert.
 
 import { blocks, tag, htmlToText } from "./xml.js";
-import { wilayasInFrenchText } from "./wilayas.js";
+import { wilayasInFrenchText, wilayaInArabicText } from "./wilayas.js";
 
-// Verified live 2026-07-20. Topic feeds first (high signal-to-noise), then the
-// general feeds which we filter by keyword.
+// Verified live 2026-09-08 (TSA, Ennahar + v2 additions Le Soir, Echorouk —
+// El Watan's RSS is dead, all variants 400). Topic feeds first (high
+// signal-to-noise), then the general feeds which we filter by keyword.
 export const FEEDS = [
   { url: "https://www.tsa-algerie.com/tag/incendies/feed/", name: "TSA", topic: "fire" },
   { url: "https://www.tsa-algerie.com/tag/canicule/feed/", name: "TSA", topic: "heat" },
   { url: "https://www.tsa-algerie.com/feed/", name: "TSA", topic: null },
   { url: "https://www.ennaharonline.com/category/algeria/feed/", name: "Ennahar", topic: null },
+  // v2: central/south coverage gap — TSA+Ennahar skew francophone/north.
+  { url: "https://www.lesoirdalgerie.com/feed/", name: "Le Soir", topic: null },
+  { url: "https://www.echoroukonline.com/feed", name: "Echorouk", topic: null },
 ];
 
 const UA = "Mozilla/5.0 (compatible; radbalek/0.2)";
 const MAX_AGE_MS = 24 * 3600 * 1000;
+
+// Le Soir d'Algérie publishes pubDate as "HH:MM | DD-MM-YYYY" (site-local,
+// Algeria is UTC+1 year-round) instead of RFC-822 — Date.parse returns NaN
+// and every item was silently dropped. Assume site-local = UTC+1; a ±1h skew
+// is harmless against a 24h freshness window.
+function parseLeSoirDate(s) {
+  const m = /^(\d{1,2}):(\d{2})\s*\|\s*(\d{2})-(\d{2})-(\d{4})$/.exec(String(s).trim());
+  if (!m) return NaN;
+  return Date.UTC(Number(m[5]), Number(m[4]) - 1, Number(m[3]), Number(m[1]) - 1, Number(m[2]));
+}
 
 export async function fetchNews(fetchFn = fetch, feeds = FEEDS) {
   const settled = await Promise.allSettled(feeds.map((f) => fetchFeed(fetchFn, f)));
@@ -42,7 +56,7 @@ async function fetchFeed(fetchFn, feed) {
     const title = htmlToText(tag(item, "title") || "");
     const link = (tag(item, "link") || "").trim();
     const pub = tag(item, "pubDate") || "";
-    const when = Date.parse(pub);
+    const when = Date.parse(pub) || parseLeSoirDate(pub);
     if (!title || !link || !Number.isFinite(when)) continue;
     if (Date.now() - when > MAX_AGE_MS) continue; // only today's news
     const summary = htmlToText(tag(item, "description") || "").slice(0, 600);
@@ -54,7 +68,13 @@ async function fetchFeed(fetchFn, feed) {
     if (feed.topic && hazard !== feed.topic) continue; // topic feed disagrees → drop
     // Headlines often omit the wilaya ("Incendies en Algérie : …") while the
     // lede names it, so search both before discarding as unplaceable.
+    // v2: Echorouk is Arabic-language — French matching finds nothing there,
+    // so fall back to a single Arabic wilaya match before giving up.
     const wilayas = wilayasInFrenchText(`${title} ${summary}`);
+    if (!wilayas.length) {
+      const wAr = wilayaInArabicText(`${title} ${summary}`);
+      if (wAr) wilayas.push({ code: wAr.code, fr: wAr.fr, ar: wAr.ar });
+    }
     if (!wilayas.length) continue; // unplaceable — useless for a wilaya app
     out.push({
       id: `press:${link}`,

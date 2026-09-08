@@ -20,7 +20,7 @@ class AppState extends ChangeNotifier {
   final Api api;
   final bool autoRefresh;
 
-  static const appVersion = '1.2.1'; // keep in sync with pubspec version
+  static const appVersion = '1.2.2'; // keep in sync with pubspec version
 
   String lang = 'fr';
   bool dark = false;
@@ -301,7 +301,14 @@ class AppState extends ChangeNotifier {
         snapshot = Snapshot.fromJson(jsonDecode(raw) as Map<String, dynamic>);
         sourceStatus = 'live';
         _lastRefresh = DateTime.now();
-        SharedPreferences.getInstance().then((p) => p.setString('rb_cache', raw));
+        // Offline cache guard: a pathological full-size snapshot (lite route
+        // is ~50KB; cap at 400KB = 8x headroom) is skipped, not crashed into
+        // SharedPreferences — the degradation rule: never let the cache
+        // write jank or ANR the alert UI over a stale-cache fallback that
+        // already exists on disk.
+        if (raw.length < 400000) {
+          SharedPreferences.getInstance().then((p) => p.setString('rb_cache', raw));
+        }
       } catch (_) {
         if (sourceStatus != 'cached') sourceStatus = 'offline';
       }

@@ -292,10 +292,11 @@ export function liteSnapshot(full) {
       // can label them "last known position" instead of presenting them as live.
       // Undefined on fresh fires → JSON.stringify drops the key (no bloat).
       ...(i.stale ? { stale: true } : {}),
-      // Text sources (Algerian press, dgpc.dz) render their own headline,
-      // named source and article link — the map-pin sources (FIRMS, quakes)
-      // don't need them, so this only fattens a handful of incidents.
-      ...(i.source === "press" || i.source === "dgpc-web"
+      // Text sources (Algerian press, dgpc.dz, GDACS forecasts) render their
+      // own headline, named source and article link — the map-pin sources
+      // (FIRMS, quakes) don't need them, so this only fattens a handful of
+      // incidents.
+      ...(i.source === "press" || i.source === "dgpc-web" || i.source === "gdacs"
         ? { headline: i.headline, link: i.link, sourceName: i.sourceName }
         : {}),
     })),
