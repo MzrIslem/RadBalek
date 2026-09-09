@@ -44,9 +44,17 @@ const json = (obj, status = 200, extra = {}) =>
     headers: corsHeaders({ "content-type": "application/json; charset=utf-8", ...extra }),
   });
 
+// Memoized: the 58-entry projection is immutable at runtime, so it is built
+// once per isolate instead of per request (free-tier CPU is 10 ms).
+let _wilayasListCache = null;
 export async function handleWilayasList() {
-  return json(WILAYAS.map((w) => ({ code: w.code, fr: w.fr, ar: w.ar })), 200, {
-    "cache-control": "public, max-age=86400",
+  _wilayasListCache ??= JSON.stringify(WILAYAS.map((w) => ({ code: w.code, fr: w.fr, ar: w.ar })));
+  return new Response(_wilayasListCache, {
+    status: 200,
+    headers: corsHeaders({
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "public, max-age=86400",
+    }),
   });
 }
 

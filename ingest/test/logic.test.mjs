@@ -23,6 +23,7 @@ import { detectEew, feltRadiusKm, haversineKm } from "../src/quakes.js";
 import { adminAuthed } from "../src/auth.js";
 import { handleRisk, geminiGenerate } from "../src/ai.js";
 import { handleTestPush } from "../src/admin.js";
+import { handleWilayasList } from "../src/reports.js";
 import { hbSlot } from "../src/push.js";
 import { decodeEntities } from "../src/xml.js";
 import { parseGdacs, fetchGdacs } from "../src/gdacs.js";
@@ -395,4 +396,20 @@ test("fetchGdacs: window is ±7d around now, iscurrent query not needed", async 
   assert.ok(asked[0].includes("fromDate=2026-09-01"), asked[0]);
   assert.ok(asked[0].includes("toDate=2026-09-15"), asked[0]);
   assert.ok(asked[0].includes("SEARCH"), asked[0]);
+});
+
+test("handleWilayasList: 58 wilayas, projection {code,fr,ar} only, memoized body stable", async () => {
+  const r1 = await handleWilayasList();
+  const r2 = await handleWilayasList();
+  const body1 = await r1.text();
+  const body2 = await r2.text();
+  // The app decodes this as a List<Map>; shape drift breaks the wilaya pickers.
+  const list = JSON.parse(body1);
+  assert.equal(list.length, 58, "58 wilayas");
+  const first = list[0];
+  assert.deepEqual(Object.keys(first).sort(), ["ar", "code", "fr"], "projection keeps code/fr/ar only");
+  assert.ok(first.code >= 1 && first.code <= 58, "codes 1-58");
+  assert.ok(r2.headers.get("cache-control")?.includes("86400"), "browser cache header kept");
+  // Memoization pin: the per-isolate cache must serve identical bytes.
+  assert.equal(body1, body2, "second call returns the memoized body");
 });

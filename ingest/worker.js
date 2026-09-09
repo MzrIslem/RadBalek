@@ -192,10 +192,7 @@ export default {
     if (path === "/v1/ai/risk" && req.method === "POST") return handleRisk(req, url, env);
     if (path === "/v1/weather.json") return store(await handleWeather(env, geo));
     if (path === "/v1/wilayas.json") return handleWilayasList();
-    if (path === "/v1/boundaries.json")
-      return new Response(JSON.stringify(geo), {
-        headers: corsHeaders({ "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=86400" }),
-      });
+    if (path === "/v1/boundaries.json") return boundariesResponse();
     // In-app update check: normalizes the latest GitHub release. Publishing a
     // release on GitHub is the ONLY step — every app learns about it within
     // ~30 min (edge cache) with zero server-side bookkeeping.
@@ -203,7 +200,7 @@ export default {
       // Latest-release info lives in KV (github.com blocks Worker-egress
       // fetches, and /releases/latest skips pre-releases anyway). Updated at
       // release time with one command:
-      //   npx wrangler kv key put "app:latest" '{"version":...}' --namespace-id=<EWS_KV> --remote
+      //   npx wrangler kv key put "app:latest" '{"version":...}' --namespace-id=<EWS_KV>
       const raw = await env.EWS_KV.get("app:latest");
       return store(new Response(raw || "{}", {
         headers: corsHeaders({ "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=900" }),
@@ -401,4 +398,17 @@ async function refresh(env, doPush = false) {
     }
   } catch {}
   return snap;
+}
+
+// The 262 KB wilayas GeoJSON stringified once per isolate, not on every
+// /v1/boundaries.json request — free-tier CPU is 10 ms, and stringify of a
+// large object graph is exactly the kind of avoidable per-request cost that
+// eats into it. The browser cache-control header still shields most traffic;
+// this memo removes the CPU hit for cache-miss requests.
+let _boundariesCache = null;
+function boundariesResponse() {
+  _boundariesCache ??= JSON.stringify(geo);
+  return new Response(_boundariesCache, {
+    headers: corsHeaders({ "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=86400" }),
+  });
 }

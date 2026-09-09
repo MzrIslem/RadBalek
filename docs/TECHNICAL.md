@@ -276,7 +276,7 @@ export data.
 | GET | `/healthz` | liveness | — |
 | GET | `/v1/alerts.json` (`?lite=1`) | current snapshot (lite ~4× smaller) | 120 s |
 | GET | `/v1/weather.json` | per-wilaya weather + FWI | 600 s |
-| GET | `/v1/wilayas.json` | the 58 wilayas | — |
+| GET | `/v1/wilayas.json` | the 58 wilayas | browser 86400 s (memoized per isolate) |
 | GET | `/v1/boundaries.json` | GeoJSON polygons | 86400 s |
 | GET | `/v1/fwi.png` / `/v1/burnt.png` | EFFIS rasters (PNG-validated) | KV/day |
 | GET | `/v1/history.json` | hourly stats time series | 300 s |
