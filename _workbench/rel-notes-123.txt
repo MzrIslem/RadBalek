@@ -1,0 +1,12 @@
+v1.2.3 — Fixed: map tiles showing "API key required"
+
+**The fix**
+- Map background now loads from a keyless provider (Esri World Gray Canvas) — the previous tile host (CARTO) began stamping an "API key required" watermark on its free maps in August 2026
+- Map colors stay muted in both light and dark themes so alert zones remain the most visible element
+- Map data attribution updated honestly (Esri · HERE · Garmin)
+
+**Unchanged — your safety features**
+- Alerts, sirens and notifications work exactly as before
+- Everything still works offline from the cached snapshot after the first load
+
+Not an official government service. In an emergency, call Protection Civile: 14 or 1021.
