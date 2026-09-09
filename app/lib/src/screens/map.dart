@@ -468,9 +468,14 @@ class _MapScreenState extends State<MapScreen> {
             ),
             children: [
               TileLayer(
+                // CARTO raster basemaps now stamp an "API key required"
+                // watermark on keyless tiles (since 2026-08); keys are
+                // per-customer, so none can ship inside a public APK (and
+                // no secrets live in git). ESRI Canvas gray is keyless and
+                // keeps the same muted palette so hazard polygons dominate.
+                // Note the {z}/{y}/{x} order — ESRI is not XYZ.
                 urlTemplate:
-                    'https://{s}.basemaps.cartocdn.com/${st.dark ? 'dark_all' : 'light_all'}/{z}/{x}/{y}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
+                    'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${st.dark ? 'Dark' : 'Light'}_Gray_Base/MapServer/tile/{z}/{y}/{x}',
                 userAgentPackageName: 'dz.radbalek.rad_balek',
               ),
               if (_layer == 'fwi' || _layer == 'burnt')
@@ -504,7 +509,7 @@ class _MapScreenState extends State<MapScreen> {
               RichAttributionWidget(
                 attributions: [
                   TextSourceAttribution(
-                    '© OpenStreetMap, © CARTO',
+                    'Esri · HERE · Garmin',
                     onTap: () {},
                   ),
                   TextSourceAttribution(

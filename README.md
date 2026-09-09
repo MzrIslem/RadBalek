@@ -58,7 +58,7 @@ Data sources ──► Cloudflare Worker (ingest, every 1 min) ──► Flutter
 | EMSC | Earthquakes | Open |
 | Open-Meteo | Temperature, wind, humidity, air quality | CC BY 4.0 |
 | Copernicus EFFIS | Fire Weather Index | Copernicus licence |
-| OpenStreetMap / CARTO | Map tiles | ODbL |
+| Esri / HERE / Garmin | Map tiles (World Gray Canvas) | Esri source terms |
 
 ## Running it yourself
 

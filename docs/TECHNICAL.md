@@ -343,7 +343,9 @@ launch (`sourceStatus: cached`), then refreshed. A failed first load shows a ret
 ### 6.3 Screens (`shell.dart` navigation)
 
 Home (unified status card: personal "am I safe?" + national count + local
-conditions), Map (`flutter_map` + CARTO tiles; layers: vigilance choropleth,
+conditions), Map (`flutter_map` + ESRI Canvas gray tiles — CARTO raster
+went key-required 2026-08, and per-customer keys can't ship in a public APK;
+layers: vigilance choropleth,
 fires, quakes, heat/wind/humidity, **FWI**, **burnt areas**; scene-cached so it
 rebuilds only when data/layer/theme changes, not per zoom tick), Sections
 (official alerts / nearby / terrain — **lazy lists**), Settings (wilayas, hazard
