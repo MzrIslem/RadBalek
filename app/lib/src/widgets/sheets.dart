@@ -24,10 +24,19 @@ String hhmm(String? iso) {
 /// The \u2066...\u2069 LTR isolate keeps "19:00 -> 20:00" from reordering into
 /// "20:00 -> 19:00" inside Arabic (RTL) text — the arrow is bidi-neutral and
 /// gets resolved right-to-left between two number runs.
-String span(String? a, String? b) {
+/// One-sided windows (GDACS sends null onset and/or null expires) render the
+/// known side alone with a localized "from"/"until" word — a dangling
+/// "19:00 → " previously leaked into cards, sheets and share texts. The word
+/// sits OUTSIDE the LTR isolate so Arabic keeps its natural reading order.
+String span(String? a, String? b, [String? lang]) {
   final x = DateTime.tryParse(a ?? '')?.toLocal();
   final y = DateTime.tryParse(b ?? '')?.toLocal();
-  final sameDay = x != null && y != null && x.day == y.day && x.month == y.month;
+  if (x == null && y == null) return '';
+  String w(String ar, String en, String fr) =>
+      switch (lang) { 'ar' => ar, 'en' => en, _ => fr };
+  if (x == null) return '${w('حتى', 'until', "jusqu'à")} \u2066${untilStamp(b)}\u2069';
+  if (y == null) return '${w('من', 'from', 'dès')} \u2066${untilStamp(a)}\u2069';
+  final sameDay = x.day == y.day && x.month == y.month;
   String dm(DateTime? d) =>
       d == null ? '' : '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')} ';
   final left = '${sameDay ? '' : dm(x)}${hhmm(a)}';
@@ -124,7 +133,8 @@ Widget _shareCard(BuildContext context, AppState st, AlertItem a) {
       Padding(
         padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('🕐 ${span(a.onset, a.expires)}', style: const TextStyle(fontSize: 13, color: Colors.black87)),
+          if (span(a.onset, a.expires, lang).isNotEmpty)
+            Text('🕐 ${span(a.onset, a.expires, lang)}', style: const TextStyle(fontSize: 13, color: Colors.black87)),
           const SizedBox(height: 10),
           Text(S.t(lang, 'action').toUpperCase(),
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: .5, color: v.solid)),
@@ -236,8 +246,9 @@ void showAlertSheet(BuildContext context, AppState st, AlertItem a) {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               _row5(ctx, Icons.info_outline, S.t(lang, 'what'), Text(S.impact(lang, a.hazard))),
               _row5(ctx, Icons.place_outlined, S.t(lang, 'where'), Text(wLabel(st, a.wilayas))),
-              _row5(ctx, Icons.schedule, S.t(lang, 'when'),
-                  Text(span(a.onset, a.expires))),
+              if (span(a.onset, a.expires, lang).isNotEmpty)
+                _row5(ctx, Icons.schedule, S.t(lang, 'when'),
+                    Text(span(a.onset, a.expires, lang))),
               if (a.wilayas.isNotEmpty && st.weather[a.wilayas.first.code] != null)
                 Builder(builder: (_) {
                   final line = wxLine(st.weather[a.wilayas.first.code]!);
@@ -274,9 +285,10 @@ void showAlertSheet(BuildContext context, AppState st, AlertItem a) {
                 OutlinedButton.icon(
                   onPressed: () {
                     final acts = S.actions(lang, a.hazard).map((x) => '• $x').join('\n');
+                    final win = span(a.onset, a.expires, lang);
                     SharePlus.instance.share(ShareParams(
                         text:
-                            '⚠️ ${a.headline['fr'] ?? ''}\n${a.headline['ar'] ?? ''}\n🕐 ${span(a.onset, a.expires)}\n$acts\n— Rad Balek رد بالك'));
+                            '⚠️ ${a.headline['fr'] ?? ''}\n${a.headline['ar'] ?? ''}${win.isEmpty ? '' : '\n🕐 $win'}\n$acts\n— Rad Balek رد بالك'));
                   },
                   icon: const Icon(Icons.share_outlined),
                   label: Text(S.t(lang, 'share')),
@@ -288,9 +300,10 @@ void showAlertSheet(BuildContext context, AppState st, AlertItem a) {
                       // Capture failed (rare) — never leave the button dead; fall
                       // back to the text share so the warning still goes out.
                       final acts = S.actions(lang, a.hazard).map((x) => '• $x').join('\n');
+                      final win = span(a.onset, a.expires, lang);
                       await SharePlus.instance.share(ShareParams(
                           text:
-                              '⚠️ ${a.headline['fr'] ?? ''}\n${a.headline['ar'] ?? ''}\n🕐 ${span(a.onset, a.expires)}\n$acts\n— Rad Balek رد بالك'));
+                              '⚠️ ${a.headline['fr'] ?? ''}\n${a.headline['ar'] ?? ''}${win.isEmpty ? '' : '\n🕐 $win'}\n$acts\n— Rad Balek رد بالك'));
                     }
                   },
                   icon: const Icon(Icons.image_outlined),

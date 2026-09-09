@@ -63,10 +63,22 @@ export function normalizeOnm(onmAlert) {
 export function normalizeFireCluster(cluster, wilayaProps, { corroborated = false, possibleIndustrial = false } = {}) {
   const w = wilayaProps ? { code: wilayaProps.code, fr: wilayaProps.fr, ar: wilayaProps.ar } : null;
   const where = { fr: w ? w.fr : "Algérie", ar: w ? `ولاية ${w.ar}` : "الجزائر" };
+  // Stable identity: the 0.05° grid cell (~5.5km), NOT the observation
+  // timestamp — the same fire keeps its id across passes within the 24h
+  // window, so app history/incident continuity stops re-birthing it each
+  // cycle. Centroid-derived fallback covers hand-built clusters (tests).
+  const cellKey = cluster.cellKey || `${Math.round(cluster.lat / 0.05)}:${Math.round(cluster.lon / 0.05)}`;
+  // Trend wording for the trilingual headline (null-safe on single-pass fires).
+  const trend = {
+    rising: { fr: "en intensification", en: "intensifying", ar: "في تصاعد" },
+    declining: { fr: "en régression", en: "declining", ar: "في تراجع" },
+    steady: { fr: "stable", en: "steady", ar: "مستقر" },
+  }[cluster.frpTrend] || null;
+  const t = (lang) => (trend ? `, ${trend[lang]}` : "");
   return {
     corroborated, // DGPC reports ongoing fires in the same wilaya
     possibleIndustrial, // inside a known oil/gas flare basin — likely not a wildfire
-    id: `firms:${cluster.lat.toFixed(3)},${cluster.lon.toFixed(3)}:${cluster.latestObservedAt}`,
+    id: `firms:cell:${cellKey}`,
     class: "incident",
     source: "firms",
     sourceName: "NASA FIRMS (satellite)",
@@ -77,11 +89,14 @@ export function normalizeFireCluster(cluster, wilayaProps, { corroborated = fals
     detections: cluster.count,
     totalFrp: cluster.totalFrp,
     observedAt: cluster.latestObservedAt,
+    passes: cluster.passes ?? 1, // distinct satellite passes in the 24h window
+    frpTrend: cluster.frpTrend ?? null, // rising | declining | steady | null (single pass)
+    firstObservedAt: cluster.firstObservedAt ?? null,
     wilayas: w ? [w] : [],
     headline: {
-      fr: `Point chaud satellite (${cluster.count} détections) — ${where.fr}`,
-      en: `Satellite hotspot (${cluster.count} detections) — ${where.fr}`,
-      ar: `نقطة حرارية عبر الأقمار الصناعية (${cluster.count} رصد) — ${where.ar}`,
+      fr: `Point chaud satellite (${cluster.count} détections${t("fr")}) — ${where.fr}`,
+      en: `Satellite hotspot (${cluster.count} detections${t("en")}) — ${where.fr}`,
+      ar: `نقطة حرارية عبر الأقمار الصناعية (${cluster.count} رصد${t("ar")}) — ${where.ar}`,
     },
   };
 }

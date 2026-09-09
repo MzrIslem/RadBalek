@@ -267,6 +267,10 @@ export function liteSnapshot(full) {
   const s = JSON.parse(full);
   return JSON.stringify({
     generatedAt: s.generatedAt,
+    // Live source credits (ONM CC BY 4.0 et al.) — the app surfaces this in
+    // Settings → About. Static text lived in the app before; shipping it here
+    // lets credits follow worker deploys without an app release.
+    attribution: s.attribution,
     stats: s.stats,
     alerts: s.alerts,
     // Keep ALL ground-truth incidents (DGPC fires, roads); cap only satellite clusters.
@@ -282,6 +286,12 @@ export function liteSnapshot(full) {
       commune: i.commune,
       detections: i.detections,
       totalFrp: i.totalFrp,
+      // Fire-evolution fields (FIRMS only; undefined elsewhere → key dropped):
+      // passes = distinct satellite passes in the 24h window, frpTrend =
+      // rising|declining|steady|null (single pass), firstObservedAt = window start.
+      passes: i.passes,
+      ...(i.frpTrend ? { frpTrend: i.frpTrend } : {}),
+      ...(i.firstObservedAt ? { firstObservedAt: i.firstObservedAt } : {}),
       corroborated: i.corroborated,
       possibleIndustrial: i.possibleIndustrial,
       lat: i.lat,

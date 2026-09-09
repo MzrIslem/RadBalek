@@ -73,12 +73,14 @@ class HomeScreen extends StatelessWidget {
 
     // Tile counts.
     final nearbyCount = st.reports.where((r) => r.wilaya != null && myCodes.contains(r.wilaya)).length;
+    // National tiles must not scream over an expired alert lingering in a
+    // cached/offline snapshot — mirror the .active guard the hero uses.
     String worst = 'green';
-    if (snap.alerts.any((a) => a.color == 'red')) {
+    if (snap.alerts.any((a) => a.color == 'red' && a.active)) {
       worst = 'red';
-    } else if (snap.alerts.any((a) => a.color == 'orange')) {
+    } else if (snap.alerts.any((a) => a.color == 'orange' && a.active)) {
       worst = 'orange';
-    } else if (snap.alerts.any((a) => a.color == 'yellow')) {
+    } else if (snap.alerts.any((a) => a.color == 'yellow' && a.active)) {
       worst = 'yellow';
     }
 

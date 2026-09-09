@@ -111,6 +111,9 @@ class Incident {
   final double? lon;
   final double? mag;
   final String? observedAt;
+  final int passes; // distinct satellite passes in the 24h window
+  final String? frpTrend; // 'rising' | 'declining' | 'steady' | null (single pass)
+  final String? firstObservedAt; // earliest dated observation in the window
   final String? headlineFr; // press / dgpc.dz posts carry their own title
   final String? link; // source article, for "lire la source"
   final String? sourceName; // e.g. "TSA", "Ennahar", "Protection Civile (dgpc.dz)"
@@ -131,6 +134,9 @@ class Incident {
     this.lon,
     this.mag,
     this.observedAt,
+    this.passes = 1,
+    this.frpTrend,
+    this.firstObservedAt,
     this.headlineFr,
     this.link,
     this.sourceName,
@@ -154,6 +160,9 @@ class Incident {
         lon: (j['lon'] as num?)?.toDouble(),
         mag: (j['mag'] as num?)?.toDouble(),
         observedAt: j['observedAt'] as String?,
+        passes: (j['passes'] as num?)?.toInt() ?? 1,
+        frpTrend: j['frpTrend'] as String?,
+        firstObservedAt: j['firstObservedAt'] as String?,
         headlineFr: ((j['headline'] as Map?)?['fr'])?.toString(),
         link: j['link'] as String?,
         sourceName: j['sourceName'] as String?,
@@ -193,6 +202,9 @@ class CitizenReport {
 
 class Snapshot {
   final String generatedAt;
+  // Live source credits from the worker ('' when absent — offline caches and
+  // pre-attribution snapshots must keep decoding, per the degradation rule).
+  final String attribution;
   final Map<String, int> byColor;
   final Map<String, int> byHazard;
   final int ongoingFires;
@@ -202,6 +214,7 @@ class Snapshot {
 
   const Snapshot({
     required this.generatedAt,
+    this.attribution = '',
     required this.byColor,
     required this.byHazard,
     required this.ongoingFires,
@@ -241,6 +254,7 @@ class Snapshot {
     } catch (_) {}
     return Snapshot(
       generatedAt: j['generatedAt'] as String? ?? '',
+      attribution: j['attribution'] as String? ?? '',
       byColor: intMap(stats['byColor']),
       byHazard: intMap(stats['byHazard']),
       ongoingFires: ((stats['dgpcSitrep'] as Map?)?['ongoing'] as num?)?.toInt() ?? 0,
@@ -260,12 +274,13 @@ class Snapshot {
 
   /// Wilaya codes currently under a given color.
   Set<int> wilayasWith(String color) =>
-      alerts.where((a) => a.color == color).expand((a) => a.wilayas.map((w) => w.code)).toSet();
+      alerts.where((a) => a.active && a.color == color).expand((a) => a.wilayas.map((w) => w.code)).toSet();
 
   /// Highest level per wilaya: 3 red, 2 orange, 1 yellow, 0 none.
   Map<int, int> levelByWilaya() {
     final out = <int, int>{};
     for (final a in alerts) {
+      if (!a.active) continue; // cached/offline expired guard
       final r = switch (a.color) { 'red' => 3, 'orange' => 2, _ => 1 };
       for (final w in a.wilayas) {
         if (r > (out[w.code] ?? 0)) out[w.code] = r;

@@ -67,7 +67,10 @@ export function inFlareZone(lat, lon) {
 }
 
 // Cluster nearby hotspots (~grid cells of `cellDeg`) into fire events so one
-// fire front doesn't create dozens of pins/notifications.
+// fire front doesn't create dozens of pins/notifications. The cell key is kept
+// on the cluster: it is the fire's STABLE IDENTITY across satellite passes.
+// (Ids used to embed the observation timestamp, so the same fire re-birthed
+// as a "new" incident every ~3h cycle.)
 export function clusterHotspots(hotspots, cellDeg = 0.05) {
   const cells = new Map();
   for (const h of hotspots) {
@@ -75,12 +78,41 @@ export function clusterHotspots(hotspots, cellDeg = 0.05) {
     if (!cells.has(key)) cells.set(key, []);
     cells.get(key).push(h);
   }
-  return [...cells.values()].map((group) => {
+  return [...cells.entries()].map(([cellKey, group]) => {
     const lat = group.reduce((s, h) => s + h.lat, 0) / group.length;
     const lon = group.reduce((s, h) => s + h.lon, 0) / group.length;
     const frp = group.reduce((s, h) => s + (h.frp || 0), 0);
-    const latest = group.map((h) => h.observedAt).sort().at(-1);
-    return { lat, lon, count: group.length, totalFrp: Math.round(frp * 10) / 10, latestObservedAt: latest };
+    // Dated observations only. The rolling 24h window already holds multiple
+    // satellite passes (VIIRS x2 + MODIS ≈ up to ~12/day) — all the history a
+    // STATELESS trend needs, no KV required. Undated rows still count toward
+    // count/totalFrp but never skew the trend. (Also fixes an old quirk: the
+    // previous .sort() let undefined observedAt win the "latest" slot.)
+    const times = group.map((h) => h.observedAt).filter(Boolean).sort();
+    const passFrp = new Map(); // observedAt (ISO) -> summed FRP of that pass
+    for (const h of group) {
+      if (!h.observedAt) continue;
+      passFrp.set(h.observedAt, (passFrp.get(h.observedAt) || 0) + (h.frp || 0));
+    }
+    // Latest pass vs the MEAN of earlier passes: comparing against the sum
+    // would bias every multi-pass fire toward "declining".
+    let frpTrend = null;
+    if (passFrp.size >= 2) {
+      const stamps = [...passFrp.keys()].sort(); // ISO sorts chronologically
+      const earlierAvg = stamps.slice(0, -1).reduce((s, t) => s + passFrp.get(t), 0) / (stamps.length - 1);
+      const latestFrp = passFrp.get(stamps.at(-1));
+      frpTrend = latestFrp >= earlierAvg * 1.5 ? "rising" : latestFrp <= earlierAvg * 0.67 ? "declining" : "steady";
+    }
+    return {
+      cellKey,
+      lat,
+      lon,
+      count: group.length,
+      totalFrp: Math.round(frp * 10) / 10,
+      firstObservedAt: times[0] ?? null,
+      latestObservedAt: times.at(-1) ?? null,
+      passes: passFrp.size,
+      frpTrend,
+    };
   });
 }
 

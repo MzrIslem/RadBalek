@@ -783,6 +783,15 @@ class _MapScreenState extends State<MapScreen> {
                 if (i.totalFrp != null)
                   _kv(ctx, Icons.whatshot_outlined,
                       '${S.t(lang, 'intensity')} · ≈${i.totalFrp!.round()} MW · ${_frpBand(i.totalFrp!, lang)}'),
+                if (i.frpTrend != null)
+                  _kv(
+                    ctx,
+                    i.frpTrend == 'rising'
+                        ? Icons.trending_up
+                        : (i.frpTrend == 'declining' ? Icons.trending_down : Icons.trending_flat),
+                    '${S.t(lang, 'fire_trend_${i.frpTrend}')} · ${i.passes} ${S.t(lang, 'det')}',
+                    color: i.frpTrend == 'rising' ? vigilance('orange', st.dark).solid : cs.onSurfaceVariant,
+                  ),
                 if (i.lat != null && i.lon != null)
                   _kv(ctx, Icons.my_location, '${i.lat!.toStringAsFixed(3)}, ${i.lon!.toStringAsFixed(3)}'),
                 const SizedBox(height: 12),

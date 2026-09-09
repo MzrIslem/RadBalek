@@ -77,7 +77,10 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     // shown as a red badge on the Alerts tab so it's visible from any screen.
     final myCodes = {...st.myWilayas, if (st.hereWilaya != null) st.hereWilaya!};
     final myAlertCount = (st.snapshot?.alerts ?? const [])
-        .where((a) => a.color != 'yellow' && a.wilayas.any((w) => myCodes.contains(w.code)))
+        .where((a) =>
+            a.color != 'yellow' &&
+            a.active &&
+            a.wilayas.any((w) => myCodes.contains(w.code)))
         .length;
     Widget badged(Widget icon, int i) =>
         (i == 0 && myAlertCount > 0) ? Badge.count(count: myAlertCount, child: icon) : icon;

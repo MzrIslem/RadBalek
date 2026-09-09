@@ -118,9 +118,14 @@ Widget alertCard(BuildContext context, AppState st, AlertItem a, {bool mine = fa
             Text('${S.t(lang, a.hazard)} — ${S.t(lang, a.color)}',
                 style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800, color: v.onContainer, height: 1.15)),
             const SizedBox(height: 4),
-            Text('${wLabel(st, a.wilayas)} · ${span(a.onset, a.expires)}',
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12.5, color: v.onContainer.withValues(alpha: .85))),
+            // GDACS alerts can carry a one-sided or missing window — build the
+            // subtitle from non-empty parts so no dangling ' · ' separator leaks.
+            Text(
+              [wLabel(st, a.wilayas), span(a.onset, a.expires, lang)]
+                  .where((p) => p.isNotEmpty)
+                  .join(' · '),
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12.5, color: v.onContainer.withValues(alpha: .85))),
           ]),
         ),
         Icon(mine ? Icons.my_location : Icons.chevron_right, size: 20,
@@ -194,7 +199,9 @@ List<Widget> incidentCards(BuildContext context, AppState st, Snapshot snap) {
           '${wLabel(st, f.wilayas)}${f.commune != null ? ' · ${f.commune}' : ''}', chip(S.t(lang, 'ongoing'), red)),
     for (final s in sats)
       card(Icons.satellite_alt_outlined, '', S.t(lang, 'sat'),
-          '${wLabel(st, s.wilayas)} · ${s.detections} ${S.t(lang, 'det')}', chip('${S.t(lang, 'corr')} ✓', green)),
+          '${wLabel(st, s.wilayas)} · ${s.detections} ${S.t(lang, 'det')}'
+          '${s.frpTrend != null ? ' · ${s.frpTrend == 'rising' ? '↑' : (s.frpTrend == 'declining' ? '↓' : '→')}' : ''}',
+          chip('${S.t(lang, 'corr')} ✓', green)),
     for (final r in roads)
       card(Icons.directions_car_outlined, '', S.t(lang, 'road'), wLabel(st, r.wilayas),
           chip(S.t(lang, 'reported'), orange)),

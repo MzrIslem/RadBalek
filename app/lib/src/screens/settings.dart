@@ -180,6 +180,15 @@ class SettingsScreen extends StatelessWidget {
                   child: Text(S.t(lang, 'about_txt'),
                       style: TextStyle(fontSize: 12.5, height: 1.5, color: cs.onSurfaceVariant)),
                 ),
+                // Live source credits shipped with the snapshot (ONM CC BY
+                // 4.0, NASA FIRMS, DGPC, EMSC, GDACS…). Absent when offline
+                // or serving an older cached snapshot — must degrade quietly.
+                if ((st.snapshot?.attribution ?? '').isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(st.snapshot!.attribution,
+                        style: TextStyle(fontSize: 11, height: 1.4, color: cs.onSurfaceVariant)),
+                  ),
                 if (st.creatorMode)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),

@@ -82,9 +82,12 @@ class OfficialAlertsScreen extends StatelessWidget {
       body: (ctx, st, snap) {
         final lang = st.lang;
         final myCodes = {...st.myWilayas, if (st.hereWilaya != null) st.hereWilaya!};
+        // Cache guard: only still-valid alerts. An expired window can only
+        // linger in an offline/cached snapshot — live fetches are already
+        // filtered server-side.
         final alerts = [
-          ...snap.alerts.where((a) => a.wilayas.any((w) => myCodes.contains(w.code))),
-          ...snap.alerts.where((a) => !a.wilayas.any((w) => myCodes.contains(w.code))),
+          ...snap.alerts.where((a) => a.active && a.wilayas.any((w) => myCodes.contains(w.code))),
+          ...snap.alerts.where((a) => a.active && !a.wilayas.any((w) => myCodes.contains(w.code))),
         ];
         return [
           if (myCodes.isNotEmpty) ...[

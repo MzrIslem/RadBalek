@@ -15,8 +15,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import { hazardFromEvent } from "../src/capfeed.js";
-import { severityColor, fcmTopicsFor } from "../src/normalize.js";
-import { makeWilayaResolver } from "../src/geo.js";
+import { severityColor, fcmTopicsFor, normalizeFireCluster } from "../src/normalize.js";
+import { makeWilayaResolver, clusterHotspots } from "../src/geo.js";
 import { fwiClass } from "../src/fwi.js";
 import { fetchFirmsHotspots, withinLastHours, FIRMS_DAY_RANGE, FIRMS_SOURCES } from "../src/firms.js";
 import { detectEew, feltRadiusKm, haversineKm } from "../src/quakes.js";
@@ -412,4 +412,135 @@ test("handleWilayasList: 58 wilayas, projection {code,fr,ar} only, memoized body
   assert.ok(r2.headers.get("cache-control")?.includes("86400"), "browser cache header kept");
   // Memoization pin: the per-isolate cache must serve identical bytes.
   assert.equal(body1, body2, "second call returns the memoized body");
+});
+
+// ---------------------------------------------------------------------------
+// FIRMS fire clusters: STABLE IDENTITY + STATELESS FRP TREND.
+//
+// Real-world bug this guards: the old incident id embedded the observation
+// timestamp, so the SAME fire re-birthed as a "new" incident every ~3h
+// satellite cycle — history filled with duplicates, incident continuity
+// broke. The id is now the 0.05° grid cell (~5.5km), and the FRP trend is
+// derived statelessly from the multiple passes already inside the rolling
+// 24h FIRMS window (VIIRS x2 + MODIS ≈ up to ~12 passes/day — no KV needed).
+// ---------------------------------------------------------------------------
+
+const CELL = (lat, lon, frp, observedAt) => ({ lat, lon, frp, observedAt });
+// Algiers-area coordinates that all round into ONE 0.05° cell ("735:61").
+const PASS_A = "2026-09-09T01:20:00Z"; // VIIRS NOAA-20 overpass
+const PASS_B = "2026-09-09T04:50:00Z"; // VIIRS NOAA-21 overpass
+const PASS_C = "2026-09-09T13:30:00Z"; // MODIS overpass
+
+test("clusterHotspots: same fire across satellite passes keeps ONE cell identity", () => {
+  // Two fetch cycles of the SAME fire (jittered coords, different passes) must
+  // land in the SAME cell key — this is what stops the incident re-birthing.
+  const batchA = clusterHotspots([CELL(36.75, 3.06, 10, PASS_A)]);
+  const batchB = clusterHotspots([CELL(36.76, 3.05, 30, PASS_B)]);
+  assert.equal(batchA[0].cellKey, "735:61");
+  assert.equal(batchB[0].cellKey, "735:61");
+});
+
+test("clusterHotspots: count/totalFrp math, first/latest ordering, passes", () => {
+  const [c] = clusterHotspots([
+    CELL(36.75, 3.06, 10.5, PASS_A),
+    CELL(36.755, 3.055, 30, PASS_B),
+  ]);
+  assert.equal(c.count, 2);
+  assert.equal(c.totalFrp, 40.5); // 0.1-precision rounding
+  assert.equal(c.firstObservedAt, PASS_A);
+  assert.equal(c.latestObservedAt, PASS_B);
+  assert.equal(c.passes, 2);
+});
+
+test("clusterHotspots: FRP trend — latest pass vs MEAN of earlier passes", () => {
+  // Rising: latest (30) ≥ 1.5× the earlier mean (10).
+  assert.equal(
+    clusterHotspots([CELL(36.75, 3.06, 10, PASS_A), CELL(36.75, 3.05, 30, PASS_B)])[0].frpTrend,
+    "rising"
+  );
+  // Declining: latest (10) ≤ 0.67× the earlier mean (30) → 10 ≤ 20.1.
+  assert.equal(
+    clusterHotspots([CELL(36.75, 3.06, 30, PASS_A), CELL(36.75, 3.05, 10, PASS_B)])[0].frpTrend,
+    "declining"
+  );
+  // Steady: 20 vs mean 20 — between the two thresholds.
+  assert.equal(
+    clusterHotspots([CELL(36.75, 3.06, 20, PASS_A), CELL(36.75, 3.05, 20, PASS_B)])[0].frpTrend,
+    "steady"
+  );
+  // Single pass → no trend possible, even with several detections in it.
+  assert.equal(
+    clusterHotspots([CELL(36.75, 3.06, 10, PASS_A), CELL(36.75, 3.05, 50, PASS_A)])[0].frpTrend,
+    null
+  );
+  // MEAN-of-earlier, not SUM (sum would bias every multi-pass fire toward
+  // "declining"): passes 10 + 20 → mean 15, latest 30 ≥ 22.5 → rising.
+  assert.equal(
+    clusterHotspots([
+      CELL(36.75, 3.06, 10, PASS_A),
+      CELL(36.75, 3.05, 20, PASS_B),
+      CELL(36.75, 3.062, 30, PASS_C),
+    ])[0].frpTrend,
+    "rising"
+  );
+});
+
+test("clusterHotspots: undated rows count for size/FRP but never skew the trend", () => {
+  // Historical quirk: an undated row could win the "latest" slot via sort()
+  // undefined-comparison, corrupting observedAt. Undated data must stay out
+  // of trend/passes/times entirely while still counting toward count/totalFrp.
+  const [c] = clusterHotspots([
+    CELL(36.75, 3.06, 100, undefined),
+    CELL(36.75, 3.05, 10, PASS_A),
+  ]);
+  assert.equal(c.count, 2);
+  assert.equal(c.totalFrp, 110);
+  assert.equal(c.passes, 1);
+  assert.equal(c.frpTrend, null);
+  assert.equal(c.firstObservedAt, PASS_A);
+  assert.equal(c.latestObservedAt, PASS_A);
+});
+
+test("normalizeFireCluster: SAME id across passes — the re-birth bug stays dead", () => {
+  // THE BUG: ids embedded the observation timestamp, so every ~3h pass
+  // created a "new" incident for the SAME fire. Now the id is the cell — a
+  // morning batch and an afternoon batch of one fire normalize to ONE id.
+  const w = { code: 16, fr: "Alger", ar: "الجزائر" };
+  const morning = clusterHotspots([CELL(36.75, 3.06, 10, PASS_A)])[0];
+  const afternoon = clusterHotspots([CELL(36.76, 3.05, 30, PASS_B)])[0];
+  const a = normalizeFireCluster(morning, w);
+  const b = normalizeFireCluster(afternoon, w);
+  assert.equal(a.id, "firms:cell:735:61");
+  assert.equal(a.id, b.id, "same fire, different pass → same incident id");
+  // New fields flow onto the incident for the app (and the firms:last cache).
+  assert.equal(b.detections, 1);
+  assert.equal(b.observedAt, PASS_B);
+  assert.equal(b.passes, 1); // each single-pass batch
+  assert.equal(b.frpTrend, null); // trend needs ≥2 passes within the batch
+  assert.equal(b.wilayas[0].code, 16);
+});
+
+test("normalizeFireCluster: trend word in the trilingual headline; hand-built fallback id", () => {
+  const w = { code: 16, fr: "Alger", ar: "الجزائر" };
+  const growing = normalizeFireCluster(
+    clusterHotspots([CELL(36.75, 3.06, 10, PASS_A), CELL(36.75, 3.05, 30, PASS_B)])[0],
+    w
+  );
+  assert.equal(growing.frpTrend, "rising");
+  assert.ok(growing.headline.fr.includes("en intensification"), growing.headline.fr);
+  assert.ok(growing.headline.en.includes("intensifying"), growing.headline.en);
+  assert.ok(growing.headline.ar.includes("في تصاعد"), growing.headline.ar);
+  // Single pass: no trend suffix at all — null-safe, no stray commas.
+  const single = normalizeFireCluster(clusterHotspots([CELL(36.75, 3.06, 10, PASS_A)])[0], w);
+  assert.equal(single.frpTrend, null);
+  assert.ok(!single.headline.fr.includes("intensification"), single.headline.fr);
+  assert.ok(single.headline.fr.includes("1 détections"), single.headline.fr);
+  // Hand-built cluster (no cellKey): centroid fallback still yields firms:cell:…
+  const handBuilt = normalizeFireCluster(
+    { lat: 36.75, lon: 3.06, count: 3, totalFrp: 40.5, latestObservedAt: PASS_B },
+    w
+  );
+  assert.equal(handBuilt.id, "firms:cell:735:61");
+  assert.equal(handBuilt.passes, 1); // absent → default 1
+  assert.equal(handBuilt.frpTrend, null);
 });
