@@ -8,5 +8,8 @@
     "start": "node run.js",
     "harvest": "node scripts/harvest-polygons.js",
     "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.130.0"
   }
 }

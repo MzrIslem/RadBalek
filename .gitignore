@@ -14,6 +14,7 @@ gemini.key
 
 ingest/.dev.vars
 ingest/out/
+ingest/.wrangler/
 node_modules/
 
 radbalek-release.jks

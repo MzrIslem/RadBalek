@@ -74,7 +74,8 @@ algeria-ews/
 │  ├─ worker.js                    # entry: cron scheduled() + fetch() router
 │  ├─ run.js                       # local dev harness
 │  ├─ wrangler.toml                # (gitignored) real KV id + cron
-│  ├─ package.json                 # scripts: start, harvest, test
+│  ├─ package.json                 # scripts: start, harvest, test; devDep wrangler@^4
+│  ├─ package-lock.json            # lockfile (wrangler pinned)
 │  ├─ test/logic.test.mjs          # node --test regression suite
 │  ├─ data/wilayas.json            # 58 wilaya boundary polygons (GeoJSON)
 │  └─ src/
@@ -440,10 +441,11 @@ Diagnose with `adb logcat RBSIREN:I ActivityTaskManager:I *:S`.
    verified 2026-09-08; the old `gho_` token no longer exists): create release
    (JSON body via file), then upload the APK asset with `curl --retry 5
    --retry-delay 4 --retry-all-errors` (a bare upload can cut at `http 000`).
-6. `wrangler kv key put "app:latest" --path <file>.json --namespace-id=<id>`
-   (**value from a file** — an inline JSON arg gets its quotes stripped
-   by PowerShell→npx→node) — or the `/admin` → Version tab. (wrangler 3.x has
-   no `--remote` flag — it targets remote by default; that flag is v4 syntax.)
+ 6. `wrangler kv key put "app:latest" --path <file>.json --namespace-id=<id> --remote`
+    (**value from a file** — an inline JSON arg gets its quotes stripped
+    by PowerShell→npx→node) — or the `/admin` → Version tab. (**wrangler 4
+    defaults KV commands to local Miniflare** — without `--remote` the write
+    silently goes to the local store, never production. Verified 2026-09-09.)
 
 Worker deploy: `. ./cf-env.ps1` (sets `CLOUDFLARE_API_TOKEN`) then
 `npx wrangler deploy` from `ingest/`.
@@ -496,8 +498,10 @@ Worker deploy: `. ./cf-env.ps1` (sets `CLOUDFLARE_API_TOKEN`) then
 - **Force a collect:** `POST /v1/admin/refresh` (no push — pushes stay cron-only).
 - **Known gotchas:** wrangler inline-JSON quote stripping (use `--path`); Firebase
    multi-line notes (use `--release-notes-file`); GitHub release works with the
-   current GCM fine-grained PAT (no `gho_` needed); wrangler 3.x has no `--remote`
-   flag; APK upload cut → `curl --retry`; Gemini `noThinking` 400s the lite model
+   current GCM fine-grained PAT (no `gho_` needed); wrangler 4 (pinned
+   `devDependency`, `^4.130.0`) defaults KV commands to **local** Miniflare —
+   `--remote` is required for production KV; APK upload cut → `curl --retry`;
+   Gemini `noThinking` 400s the lite model
    (since v2 the guard lives in `geminiGenerate` — `thinkingBudget:0` is only sent
    for non-lite models, so `noThinking:true` is safe to request everywhere); the
    device USB drops off intermittently.
