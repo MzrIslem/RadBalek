@@ -605,14 +605,18 @@ class HomeScreen extends StatelessWidget {
     if (code == null) return null;
     final today = (st.weather[code]?['r'] as Map?)?['today'] as Map?;
     final m = st.metar[code];
-    final flags = (m?['flags'] as Map?) ?? const {};
+    // METAR entries carry FLAT boolean flags (rain/ts/fog/dust directly on
+    // the airport object) — pinned against the live /v1/metar.json shape.
+    final mRain = m?['rain'] == true;
+    final mTs = m?['ts'] == true;
+    final mFog = m?['fog'] == true;
+    final mDust = m?['dust'] == true;
     final pp = today?['pp'] as num?;
     final gust = today?['gust'] as num?;
     final vis = today?['vis'] as num?;
     final cape = today?['cape'] as num?;
     // An airport actually reporting rain / thunder / fog NOW always shows.
-    final metarNow =
-        flags['rain'] == true || flags['ts'] == true || flags['fog'] == true;
+    final metarNow = mRain || mTs || mFog;
     if (today == null && !metarNow) return null;
     final notable = (pp ?? 0) >= 40 ||
         (gust ?? 0) >= 50 ||
@@ -641,10 +645,10 @@ class HomeScreen extends StatelessWidget {
         (S.t(lang, 'r_vis'), '$vis km', vis < 1 ? 2 : (vis < 2 ? 1 : 0)),
     ];
     final nowWords = [
-      if (flags['rain'] == true) S.t(lang, 'r_pp'),
-      if (flags['ts'] == true) S.t(lang, 'r_cape'),
-      if (flags['fog'] == true) S.t(lang, 'r_vis'),
-      if (flags['dust'] == true) S.t(lang, 'sandstorm'),
+      if (mRain) S.t(lang, 'r_pp'),
+      if (mTs) S.t(lang, 'r_cape'),
+      if (mFog) S.t(lang, 'r_vis'),
+      if (mDust) S.t(lang, 'sandstorm'),
     ].join(' · ');
     final cs = Theme.of(context).colorScheme;
     return Container(
