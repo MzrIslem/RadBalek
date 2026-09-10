@@ -224,6 +224,15 @@ class MainActivity : FlutterActivity() {
                     setSound(rawUri(R.raw.rb_clear), notif)
                 }
             )
+            // BRIEFING — quiet morning summary (v1.3.0). Deliberately NO sound
+            // or vibration: routine information must never train users to
+            // swipe notifications away — that reflex would later kill the
+            // sirens too.
+            nm.createNotificationChannel(
+                NotificationChannel("briefing_s2", "Briefing matinal — النشرة الصباحية", NotificationManager.IMPORTANCE_LOW).apply {
+                    description = "Résumé quotidien 06h30"
+                }
+            )
         }
     }
 }

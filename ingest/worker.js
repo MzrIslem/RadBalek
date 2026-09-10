@@ -32,6 +32,8 @@ import {
 import { adminAuthed } from "./src/auth.js";
 import { ADMIN_HTML } from "./src/adminui.js";
 import { handleWeather } from "./src/weather.js";
+import { fetchMetar } from "./src/metar.js";
+import { sendBriefing } from "./src/briefing.js";
 import { handleChat, handleCategory, handleRisk } from "./src/ai.js";
 import { watchPipeline, watchStale } from "./src/watchdog.js";
 
@@ -58,6 +60,7 @@ export default {
       "/v1/reports.json": 600,
       "/v1/history.json": 300, // kills the 168-get burst per history open
       "/v1/weather.json": 600,
+      "/v1/metar.json": 600,
       // NOTE: /v1/fwi.png and /v1/burnt.png are intentionally NOT edge-cached.
       // MapServer returns errors as 200 + HTML, and an edge-cached error page
       // can't be purged on workers.dev — it froze the fire-risk layer for a
@@ -191,6 +194,7 @@ export default {
     if (path === "/v1/ai/category" && req.method === "POST") return handleCategory(req, env);
     if (path === "/v1/ai/risk" && req.method === "POST") return handleRisk(req, url, env);
     if (path === "/v1/weather.json") return store(await handleWeather(env, geo));
+    if (path === "/v1/metar.json") return store(await fetchMetar(env));
     if (path === "/v1/wilayas.json") return handleWilayasList();
     if (path === "/v1/boundaries.json") return boundariesResponse();
     // In-app update check: normalizes the latest GitHub release. Publishing a
@@ -377,6 +381,14 @@ async function refresh(env, doPush = false) {
     } catch {}
     await watchPipeline(env, snap, { fatal: String(err.message) });
   }
+
+  // Morning briefing (06:30 DZ): self-gates on 05:30Z + KV briefing:{date},
+  // capped at 20 sends/cycle so the free-tier subrequest budget survives.
+  // A broken briefing must never kill the alert pipeline sharing this
+  // invocation — hence the swallow-everything catch.
+  try {
+    await sendBriefing(env, snap);
+  } catch {}
 
   // Hourly stats snapshot (newest-first key) — the analyzable time series.
   // Deliberately AFTER the push block: this is analytics, and it must never be

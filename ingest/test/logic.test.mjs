@@ -27,6 +27,9 @@ import { handleWilayasList } from "../src/reports.js";
 import { hbSlot } from "../src/push.js";
 import { decodeEntities } from "../src/xml.js";
 import { parseGdacs, fetchGdacs } from "../src/gdacs.js";
+import { normalizeMetar } from "../src/metar.js";
+import { rainDays } from "../src/weather.js";
+import { buildBriefing } from "../src/briefing.js";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const geo = JSON.parse(readFileSync(join(__dir, "..", "data", "wilayas.json"), "utf8"));
@@ -519,6 +522,122 @@ test("normalizeFireCluster: SAME id across passes — the re-birth bug stays dea
   assert.equal(b.frpTrend, null); // trend needs ≥2 passes within the batch
   assert.equal(b.wilayas[0].code, 16);
 });
+
+// ---------------------------------------------------------------------------
+// Rain arc (v1.3.0): NOAA METAR normalization, Open-Meteo hourly rain
+// aggregation, morning-briefing content. Pure pins against the REAL shapes
+// each source serves — probed live 2026-09-09 (see src/metar.js header).
+// ---------------------------------------------------------------------------
+
+test("normalizeMetar: real NOAA shapes — '6+' vis, -RA rain flag, kt→km/h conversions", () => {
+  // DAAG was live-reporting this exact entry on 2026-09-09: light rain,
+  // 6 kt wind, vis "6+" (NOAA's "6 statute miles or more" encoding).
+  const n = normalizeMetar({ icaoId: "DAAG", visib: "6+", wxString: "-RA", wspd: 6, reportTime: "2026-09-09T21:00:00Z" });
+  assert.equal(n.vis, 10, "'6+' SM → 10 km nominal");
+  assert.equal(n.rain, true, "'-RA' is light rain — includes() must catch prefixed forms");
+  assert.equal(n.wind, 11, "6 kt × 1.852 = 11.11 → rounds to 11 km/h");
+  assert.equal(n.icao, "DAAG");
+  assert.equal(n.at, "2026-09-09T21:00:00Z");
+
+  // DABB live entry: 4.97 SM numeric vis, 3 kt.
+  const b = normalizeMetar({ icaoId: "DABB", visib: 4.97, wspd: 3 });
+  assert.equal(b.vis, 8.0, "4.97 SM × 1.609 = 7.99 km → rounds to 8.0 (1dp)");
+  assert.equal(b.wind, 6, "3 kt × 1.852 = 5.56 → 6 km/h");
+  assert.equal(b.rain, false, "no RA in the wx string → no rain flag");
+});
+
+test("normalizeMetar: VRB wind, missing gust, empty entry never throws", () => {
+  const v = normalizeMetar({ icaoId: "DAOO", wdir: "VRB", wspd: 4 });
+  assert.equal(v.gust, null, "no wgst field → null gust, never 0 (0 km/h would read as calm)");
+  assert.equal(v.vis, null, "absent visib → null, not a fabricated '0 km'");
+  assert.equal(v.t, null);
+  // Empty entry: the airport never answered NOAA's proxy — every field null,
+  // zero throws. The route serves airports[] and the app omits silently.
+  const e = normalizeMetar({});
+  assert.equal(e.vis, null);
+  assert.equal(e.wind, null);
+  assert.equal(e.rain, false);
+  assert.equal(e.raw, null);
+});
+
+test("normalizeMetar: TS / DU / SA / SN / FG flag coverage", () => {
+  const ts = normalizeMetar({ wxString: "VCTS RA" });
+  assert.equal(ts.ts, true, "distant thunderstorm TS");
+  assert.equal(ts.rain, true);
+  const dust = normalizeMetar({ wxString: "DU" });
+  const sand = normalizeMetar({ wxString: "SA" });
+  assert.equal(dust.dust, true, "DU = dust");
+  assert.equal(sand.dust, true, "SA = sand — same family, one flag");
+  const snow = normalizeMetar({ wxString: "-SN BR" });
+  assert.equal(snow.snow, true);
+  assert.equal(snow.fog, false, "BR is mist — distinct code from FG fog, no false flag");
+  const fg = normalizeMetar({ wxString: "FG" });
+  assert.equal(fg.fog, true);
+});
+
+test("rainDays: per-day max pp/cape/gust, MIN vis, m→km, nulls on absent/partial", () => {
+  // pastDays=1 keeps arrays small. Day 0 (today) = hours 24–47, d1 = 48–71.
+  const fill = (len, v) => Array.from({ length: len }, () => v);
+  const mk = (len, fn) => Array.from({ length: len }, (_, i) => fn(i));
+  const hourly = {
+    precipitation_probability: mk(72, (i) => (i >= 24 && i < 48 ? [20, 35, 61.4][(i - 24) % 3] : 0)),
+    cape: mk(72, (i) => (i >= 24 && i < 48 ? 900 + (i - 24) : 10)),
+    wind_gusts_10m: mk(72, (i) => (i >= 24 && i < 48 ? 33.333 + (i - 24) * 0.1 : 5)),
+    visibility: mk(72, (i) => (i >= 24 && i < 48 ? 8500 - (i - 24) * 100 : 24000)),
+  };
+  const r = rainDays(hourly, 1);
+  assert.equal(r.today.pp, 61, "max of 20/35/61.4 → Math.round(61.4) = 61");
+  assert.equal(r.today.cape, 923, "max 900+23 = 923");
+  assert.equal(r.today.gust, 35.6, "33.333 + 23×0.1 = 35.63 → 1dp max");
+  assert.equal(r.today.vis, 6.2, "8500-2300=6200 m → min 6200/1000 = 6.2 km");
+  assert.equal(r.d1.pp, 0, "constant 0 pp → max 0");
+  assert.equal(r.d1.gust, 5);
+  // Partial day: pp shorter than s+24 → whole day null.
+  const partial = { ...hourly, precipitation_probability: hourly.precipitation_probability.slice(0, 60) };
+  assert.equal(rainDays(partial, 1).d2, null);
+  // Absent required arrays (old cached payloads / other shapes) → null overall.
+  assert.equal(rainDays({ visibility: fill(72, 8000) }), null);
+  assert.equal(rainDays({ precipitation_probability: fill(72, 10) }), null);
+  assert.equal(rainDays(null), null);
+  // All days too short → all null → null overall.
+  assert.equal(rainDays({ precipitation_probability: [1], wind_gusts_10m: [2] }, 1), null);
+});
+
+test("buildBriefing: alerts + rain signature + fire in one bilingual digest", () => {
+  const snap = { alerts: [{ color: "orange", hazard: "flood", wilayas: [{ code: 16 }] }] };
+  const wx = { wilayas: [{ code: 16, r: { today: { pp: 60, gust: 70.4, cape: 900 } }, fire: { class: "moderate" } }] };
+  const b = buildBriefing(snap, wx, 16);
+  assert.equal(b.title, "🌤️ Briefing — Alger");
+  assert.ok(b.fr.includes("1 alerte"), b.fr);
+  assert.ok(b.fr.includes("flood"), b.fr, "top hazards named");
+  assert.ok(b.fr.includes("pluie 60%"), b.fr);
+  assert.ok(b.fr.includes("rafales 70 km/h"), b.fr, "gust rounded");
+  assert.ok(b.fr.includes("orages"), b.fr, "cape ≥ 800");
+  assert.ok(b.fr.includes("🟠"), b.fr, "worst color emoji");
+  assert.ok(b.ar.includes("أمطار 60%"), b.ar);
+  assert.ok(b.ar.includes("تحذير"), b.ar);
+  assert.ok(!b.fr.includes("feu"), "fire.class moderate → no fire line (green-noise rule)");
+});
+
+test("buildBriefing: all-clear + high fire danger variants", () => {
+  // No alerts, no notable rain, but fire danger HIGH → the digest still says
+  // something (this is a daily habit push, not an alert).
+  const quiet = buildBriefing({ alerts: [] }, { wilayas: [{ code: 16, fire: { class: "high" } }] }, 16);
+  assert.ok(quiet.fr.includes("Aucune alerte 🟢"));
+  assert.ok(quiet.ar.includes("لا تحذيرات 🟢"));
+  assert.ok(quiet.fr.includes("feu 🔥"));
+  assert.ok(quiet.ar.includes("خطر حريق 🔥"), quiet.ar);
+  // Below-threshold rain must NOT leak into the digest (pp 29 < 30, gust 49 < 50).
+  const low = buildBriefing({ alerts: [] }, { wilayas: [{ code: 16, r: { today: { pp: 29, gust: 49, cape: 799 } } }] }, 16);
+  assert.ok(!low.fr.includes("pluie"), low.fr);
+  assert.ok(!low.fr.includes("rafales"), low.fr);
+  assert.ok(!low.fr.includes("orages"), low.fr);
+  // Unknown code degrades to the country name, never a crash.
+  const unk = buildBriefing({ alerts: [] }, { wilayas: [] }, 999);
+  assert.equal(unk.title, "🌤️ Briefing — Algérie");
+});
+
+// ---------------------------------------------------------------------------
 
 test("normalizeFireCluster: trend word in the trilingual headline; hand-built fallback id", () => {
   const w = { code: 16, fr: "Alger", ar: "الجزائر" };

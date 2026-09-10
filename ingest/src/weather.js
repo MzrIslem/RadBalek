@@ -9,6 +9,43 @@ import { notifyAdmin } from "./watchdog.js";
 // DMC to converge; DC drifts longer but its influence is damped by BUI.
 const FWI_SPINUP_DAYS = 14;
 
+// Pure: hourly rain-signature aggregates for one wilaya. Open-Meteo returns
+// (past+forecast)*24 hourly values; day d starts at (pastDays+d)*24. Each
+// day gets the max precip probability / CAPE / gust and the MIN visibility —
+// the numbers that answer "will this wilaya flood today?". Nulls when the
+// hourly block is absent or shorter than needed (old consumers unaffected).
+export function rainDays(hourly, pastDays = FWI_SPINUP_DAYS) {
+  const pp = hourly?.precipitation_probability;
+  const cape = hourly?.cape;
+  const gust = hourly?.wind_gusts_10m;
+  const vis = hourly?.visibility;
+  if (!Array.isArray(pp) || !Array.isArray(gust)) return null;
+  const dayAt = (d) => {
+    const s = (pastDays + d) * 24;
+    if (pp.length < s + 24) return null;
+    const agg = { pp: null, cape: null, gust: null, vis: null };
+    for (let h = 0; h < 24; h++) {
+      const i = s + h;
+      if (typeof pp[i] === "number") agg.pp = Math.max(agg.pp ?? -1, Math.round(pp[i]));
+      if (Array.isArray(cape) && typeof cape[i] === "number") agg.cape = Math.max(agg.cape ?? -1, Math.round(cape[i]));
+      if (typeof gust[i] === "number") {
+        const g = Math.round(gust[i] * 10) / 10;
+        if (agg.gust == null || g > agg.gust) agg.gust = g;
+      }
+      if (Array.isArray(vis) && typeof vis[i] === "number") {
+        const v = Math.round((vis[i] / 1000) * 10) / 10; // m → km
+        if (agg.vis == null || v < agg.vis) agg.vis = v;
+      }
+    }
+    return agg;
+  };
+  const today = dayAt(0);
+  const d1 = dayAt(1);
+  const d2 = dayAt(2);
+  if (!today && !d1 && !d2) return null;
+  return { today, d1, d2 };
+}
+
 export async function handleWeather(env, geo) {
   const cached = await env.EWS_KV.get("weather");
   if (cached)
@@ -39,6 +76,10 @@ export async function handleWeather(env, geo) {
     // The extra daily fields are the CFFWIS inputs (peak-fire-weather proxies);
     // past_days warms up the cumulative fuel-moisture codes.
     `&daily=apparent_temperature_max,temperature_2m_max,relative_humidity_2m_min,wind_speed_10m_max,precipitation_sum` +
+    // Rain arc: hourly precip probability / CAPE / gusts / visibility drive the
+    // Today card and the 06:30 briefing. Same past_days shift applies (index
+    // FWI_SPINUP_DAYS*24 is the first hour of TODAY).
+    `&hourly=precipitation_probability,cape,wind_gusts_10m,visibility` +
     `&past_days=${FWI_SPINUP_DAYS}&forecast_days=3&timezone=UTC`;
   const aqUrl =
     `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lats}&longitude=${lons}` +
@@ -125,6 +166,9 @@ export async function handleWeather(env, geo) {
         wind: cur.wind_speed_10m ?? null,
         f: { today, peak48: next48, trend, risk: riskOf(Math.max(today ?? -99, next48 ?? -99)) },
         fire,
+        // Rain arc: per-day rain signature (null when hourly block absent —
+        // old consumers and offline caches simply don't see the key).
+        r: rainDays(arr[i]?.hourly),
         aq: (() => {
           const c = aqArr[i]?.current;
           if (!c) return null;

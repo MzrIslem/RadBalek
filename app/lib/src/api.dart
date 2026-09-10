@@ -57,6 +57,19 @@ class Api {
     };
   }
 
+  /// Airport now-cast per wilaya code (NOAA METAR): {vis, wind, wx,
+  /// flags{rain,ts,snow,fog,dust}, t, ...}. Empty map when NOAA is
+  /// unreachable — the card omits, never fabricates.
+  Future<Map<int, Map<String, dynamic>>> fetchMetar() async {
+    final r = await _c.get(Uri.parse('$base/v1/metar.json'));
+    if (r.statusCode != 200) throw Exception('metar HTTP ${r.statusCode}');
+    final j = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+    return {
+      for (final a in (j['airports'] as List? ?? const []))
+        ((a as Map)['code'] as num).toInt(): a.cast<String, dynamic>()
+    };
+  }
+
   Future<List<CitizenReport>> fetchReports() async {
     final r = await _c.get(Uri.parse('$base/v1/reports.json?limit=30'));
     if (r.statusCode != 200) throw Exception('reports HTTP ${r.statusCode}');

@@ -161,6 +161,10 @@ class HomeScreen extends StatelessWidget {
             final card = _fireDanger(context, st);
             return card == null ? const <Widget>[] : [const SizedBox(height: 12), card];
           })(),
+          ...(() {
+            final card = _todayRain(context, st);
+            return card == null ? const <Widget>[] : [const SizedBox(height: 12), card];
+          })(),
           const SizedBox(height: 22),
           // 3 — Big tile access buttons.
           _launcherLabel(context, S.t(lang, 'quick_access')),
@@ -585,6 +589,107 @@ class HomeScreen extends StatelessWidget {
         ]),
         const SizedBox(height: 8),
         Text(S.t(lang, 'fwi_scale'),
+            style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+      ]),
+    );
+  }
+
+  /// Today's weather signature (arc pluie, v1.3.0): hourly-derived rain
+  /// probability / gusts / visibility / storm potential + live METAR
+  /// now-cast. Same discipline as _fireDanger — null when nothing notable,
+  /// so quiet days stay quiet (green-noise rule: a permanent yellow card
+  /// erodes trust faster than a rare orange one).
+  Widget? _todayRain(BuildContext context, AppState st) {
+    final lang = st.lang;
+    final code = st.hereWilaya ?? (st.myWilayas.isNotEmpty ? st.myWilayas.first : null);
+    if (code == null) return null;
+    final today = (st.weather[code]?['r'] as Map?)?['today'] as Map?;
+    final m = st.metar[code];
+    final flags = (m?['flags'] as Map?) ?? const {};
+    final pp = today?['pp'] as num?;
+    final gust = today?['gust'] as num?;
+    final vis = today?['vis'] as num?;
+    final cape = today?['cape'] as num?;
+    // An airport actually reporting rain / thunder / fog NOW always shows.
+    final metarNow =
+        flags['rain'] == true || flags['ts'] == true || flags['fog'] == true;
+    if (today == null && !metarNow) return null;
+    final notable = (pp ?? 0) >= 40 ||
+        (gust ?? 0) >= 50 ||
+        (cape ?? 0) >= 800 ||
+        (vis != null && vis < 2) ||
+        metarNow;
+    if (!notable) return null; // pp 30% + breeze = silence
+    Color bg(int level) => switch (level) {
+          2 => vigilance('red', st.dark).container,
+          1 => vigilance('orange', st.dark).container,
+          _ => vigilance('green', st.dark).container,
+        };
+    Color fg(int level) => switch (level) {
+          2 => vigilance('red', st.dark).onContainer,
+          1 => vigilance('orange', st.dark).onContainer,
+          _ => vigilance('green', st.dark).onContainer,
+        };
+    final cells = <(String, String, int)>[
+      if (pp != null)
+        (S.t(lang, 'r_pp'), '$pp%', pp >= 70 ? 2 : (pp >= 40 ? 1 : 0)),
+      if (gust != null)
+        (S.t(lang, 'r_gust'), '${gust.round()} km/h', gust >= 80 ? 2 : (gust >= 50 ? 1 : 0)),
+      if (cape != null)
+        (S.t(lang, 'r_cape'), '${cape.round()}', cape >= 1500 ? 2 : (cape >= 800 ? 1 : 0)),
+      if (vis != null)
+        (S.t(lang, 'r_vis'), '$vis km', vis < 1 ? 2 : (vis < 2 ? 1 : 0)),
+    ];
+    final nowWords = [
+      if (flags['rain'] == true) S.t(lang, 'r_pp'),
+      if (flags['ts'] == true) S.t(lang, 'r_cape'),
+      if (flags['fog'] == true) S.t(lang, 'r_vis'),
+      if (flags['dust'] == true) S.t(lang, 'sandstorm'),
+    ].join(' · ');
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(20)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Text('🌦️', style: TextStyle(fontSize: 18)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text('${S.t(lang, 'rain_title')} — ${st.wilayaName(code)}',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+          ),
+        ]),
+        if (cells.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Row(children: [
+            for (final (label, value, level) in cells) ...[
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                  decoration: BoxDecoration(color: bg(level), borderRadius: BorderRadius.circular(12)),
+                  child: Column(children: [
+                    Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 10.5, color: fg(level).withValues(alpha: .85))),
+                    const SizedBox(height: 2),
+                    Text(value, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: fg(level))),
+                  ]),
+                ),
+              ),
+              if (label != cells.last.$1) const SizedBox(width: 8),
+            ],
+          ]),
+        ],
+        if (nowWords.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text('${S.t(lang, 'r_metar')} ${m?['name'] ?? ''} · $nowWords',
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+          ),
+        const SizedBox(height: 8),
+        Text('Open-Meteo.com · NOAA aviationweather.gov',
             style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
       ]),
     );

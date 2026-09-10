@@ -20,7 +20,7 @@ class AppState extends ChangeNotifier {
   final Api api;
   final bool autoRefresh;
 
-  static const appVersion = '1.2.3'; // keep in sync with pubspec version
+  static const appVersion = '1.3.0'; // keep in sync with pubspec version
 
   String lang = 'fr';
   bool dark = false;
@@ -35,12 +35,19 @@ class AppState extends ChangeNotifier {
     'heat': true, 'storm': true, 'flood': true, 'wind': true, 'sandstorm': true, 'fire': true, 'road': true,
     'quake': true, 'cold': true, 'other': true,
   };
+  // Morning briefing (06h30 DZ) — OPT-IN per arc scope: b{code} topics are
+  // subscribed only when this is on; default OFF so nobody gets routine
+  // notifications they never asked for.
+  bool briefingPref = false;
 
   Snapshot? snapshot;
   List<Wilaya> wilayas = const [];
   List<CitizenReport> reports = const [];
   Map<String, dynamic>? boundaries;
   Map<int, Map<String, dynamic>> weather = {};
+  // Airport now-cast (METAR) — same in-memory contract as weather: absent
+  // offline, cards omit gracefully, never a fabricated "0 km visibility".
+  Map<int, Map<String, dynamic>> metar = {};
   String sourceStatus = 'offline';
   bool followMe = true; // "alerts where I am": on-open position -> wilaya
   int? hereWilaya;
@@ -201,6 +208,7 @@ class AppState extends ChangeNotifier {
     sosNumbers = p.getStringList('rb_sos') ?? ['14', '17', '1055'];
     voiceAlerts = p.getBool('rb_voice') ?? true;
     bigText = p.getBool('rb_bigtext') ?? false;
+    briefingPref = p.getBool('rb_briefing') ?? false;
     contactNames = {
       for (final e in p.getStringList('rb_names') ?? const <String>[])
         if (e.contains('|')) e.substring(0, e.indexOf('|')): e.substring(e.indexOf('|') + 1),
@@ -318,12 +326,23 @@ class AppState extends ChangeNotifier {
       try {
         reports = await api.fetchReports();
       } catch (_) {}
+      // Gate decided ONCE for both payloads — deciding it after the weather
+      // fetch would re-read a just-reset _lastWeather and never run METAR.
+      final weatherDue = force || _lastWeather == null ||
+          DateTime.now().difference(_lastWeather!) > const Duration(minutes: 10);
       try {
         // Weather is the largest payload — refetch at most every 10 min.
-        if (force || _lastWeather == null ||
-            DateTime.now().difference(_lastWeather!) > const Duration(minutes: 10)) {
+        if (weatherDue) {
           weather = await api.fetchWeather();
           _lastWeather = DateTime.now();
+        }
+      } catch (_) {}
+      try {
+        // METAR now-cast rides the same gate (its KV TTL is 30 min — one
+        // refresh serves several). Separate try so a NOAA hiccup never
+        // takes the weather payload down with it.
+        if (weatherDue) {
+          metar = await api.fetchMetar();
         }
       } catch (_) {}
     } finally {
@@ -427,6 +446,7 @@ class AppState extends ChangeNotifier {
     await p.setStringList('rb_family', family);
     await p.setStringList('rb_sos', sosNumbers);
     await p.setBool('rb_voice', voiceAlerts);
+    await p.setBool('rb_briefing', briefingPref);
     await p.setStringList('rb_names', [for (final e in contactNames.entries) '${e.key}|${e.value}']);
     await p.setStringList('rb_my', myWilayas.map((c) => c.toString()).toList());
     await p.setStringList('rb_notif_off', notif.entries.where((e) => !e.value).map((e) => e.key).toList());
@@ -467,6 +487,14 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Opt-in morning briefing (06h30 DZ): b{code} topics for myWilayas.
+  void toggleBriefing() {
+    briefingPref = !briefingPref;
+    _persist();
+    syncTopics();
+    notifyListeners();
+  }
+
   bool _topicsBusy = false;
   bool _topicsDirty = false;
 
@@ -499,6 +527,14 @@ class AppState extends ChangeNotifier {
       for (final h in notif.keys) {
         desired.add('w${code}_${h}_red');
         if (notif[h] ?? true) desired.add('w${code}_${h}_orange');
+      }
+    }
+    // Morning briefing topics — opt-in, keyed on myWilayas only (hereWilaya
+    // is GPS-transient; a briefing is a habit, not a location). Inherited
+    // free: diff-unsubscribe + token-rotation resubscribe.
+    if (briefingPref) {
+      for (final code in myWilayas) {
+        desired.add('b$code');
       }
     }
     try {

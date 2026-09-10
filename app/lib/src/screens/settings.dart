@@ -112,6 +112,17 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 10),
                 Text('${S.t(lang, 'set_notif_note')} ${S.t(lang, 'quiet_note')}',
                     style: TextStyle(fontSize: 10.5, color: cs.onSurfaceVariant)),
+                const SizedBox(height: 10),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                  secondary: Icon(Icons.wb_twilight, size: 20, color: vigilance('orange', st.dark).solid),
+                  title: Text(S.t(lang, 'briefing'), style: const TextStyle(fontSize: 13.5)),
+                  subtitle: Text(S.t(lang, 'briefing_note'),
+                      style: TextStyle(fontSize: 10.5, color: cs.onSurfaceVariant)),
+                  value: st.briefingPref,
+                  onChanged: (_) => st.toggleBriefing(),
+                ),
                 // The channel shortcut and the siren test now live in the
                 // Fiabilité checklist below, next to the state they verify.
               ])),
