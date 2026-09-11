@@ -12,6 +12,7 @@ import 'geo_utils.dart';
 import 'keys.dart';
 import 'models.dart';
 import 'voice.dart';
+import 'widget_feed.dart';
 
 /// App-wide state: language, theme, subscriptions, live data.
 /// FCM topic subscription hooks live in [syncTopics] — activated once the
@@ -351,6 +352,14 @@ class AppState extends ChangeNotifier {
     notifyListeners(); // single rebuild per cycle (audit app#6)
     unawaited(loadBoundaries().then((_) => locate()));
     unawaited(checkForUpdate());
+    // Home-screen widget (arc 3.5): re-project after every refresh so the
+    // widget tracks what the app shows. Fire-and-forget — a failed
+    // projection leaves the widget on its last honest state.
+    unawaited(projectWidget(
+      snap: snapshot,
+      myCodes: {...myWilayas, ?hereWilaya},
+      lang: lang,
+    ));
     // Re-verify the siren prerequisites (cheap native call). refresh() runs on
     // launch and on resume, so an OEM revoking a permission surfaces on the
     // home banner without the user ever opening Réglages.

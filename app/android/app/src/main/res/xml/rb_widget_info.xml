@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Rad Balek home-screen vigilance widget (arc 3.5).
+  4x2 default placement, resizable both ways. updatePeriodMillis=0:
+  updates are driven by home_widget (app writes payload on every snapshot
+  refresh + a workmanager 30-min fallback), never by the system scheduler —
+  a widget must not wake the radio on its own schedule.
+-->
+<appwidget-provider
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:description="@string/rb_widget_desc"
+/>

@@ -3,10 +3,12 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:workmanager/workmanager.dart';
 import 'src/app_state.dart';
 import 'src/keys.dart';
 import 'src/screens/shell.dart';
 import 'src/theme.dart';
+import 'src/widget_feed.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,6 +17,16 @@ Future<void> main() async {
     // App Check / Play Integrity is needed. Android reads google-services.json.
     try {
       await Firebase.initializeApp();
+    } catch (_) {}
+    // Home-screen widget fallback refresh (arc 3.5): when the app isn't
+    // opened for a while, a 30-min workmanager task re-projects the widget
+    // from a fresh fetch (or the offline cache). initialize() wires the
+    // background isolate's entry point; Android needs no native setup.
+    // Failure is quiet by design — a missing fallback leaves the widget on
+    // its last honest projection, never blocks app startup.
+    try {
+      await Workmanager().initialize(widgetRefreshTask);
+      await ensureWidgetTask();
     } catch (_) {}
   }
   runApp(const RadBalekApp());

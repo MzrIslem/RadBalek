@@ -3,6 +3,11 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
+    // Explicit for the Glance widget: the Flutter plugin would apply Kotlin
+    // anyway, but the Compose compiler plugin resolves deterministically when
+    // Kotlin is declared here first.
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.gms.google-services")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
@@ -22,6 +27,11 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    // Glance widget is Compose-based — AGP must enable Compose for the module.
+    buildFeatures {
+        compose = true
     }
 
     defaultConfig {
@@ -76,6 +86,9 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:34.4.0"))
     implementation("com.google.firebase:firebase-messaging")
     implementation("androidx.core:core-ktx:1.15.0")
+    // Home-screen vigilance widget (arc 3.5) — Glance 1.2.0 stable.
+    implementation("androidx.glance:glance-appwidget:1.2.0")
+    implementation("androidx.glance:glance-material3:1.2.0")
 }
 
 flutter {

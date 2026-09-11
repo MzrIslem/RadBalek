@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Home-screen vigilance widget (arc 3.5): widget-picker description.
+         One trilingual string: the picker shows a single line, and the app
+         itself is trilingual by design (fr default, en, ar). -->
+    <string name="rb_widget_desc">Rad Balek — vigilance of my wilayas at a glance / رد بالك — حالة ولاياتي بنظرة</string>
+    <!-- Static widget copy. Chosen at runtime from wb_lang (the APP
+         language), NOT the system locale — the widget must agree with the
+         app about which language it speaks, whatever the OS says. -->
+    <string name="rb_widget_updated">Updated %1$s</string>
+    <string name="rb_widget_updated_fr">MAJ %1$s</string>
+    <string name="rb_widget_updated_ar">تحديث %1$s</string>
+    <string name="rb_widget_open_en">Open Rad Balek to refresh</string>
+    <string name="rb_widget_open_fr">Ouvrez Rad Balek pour actualiser</string>
+    <string name="rb_widget_open_ar">افتح رد بالك للتحديث</string>
+</resources>

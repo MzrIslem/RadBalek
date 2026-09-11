@@ -54,6 +54,20 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT"/>
             </intent-filter>
         </service>
+        <!-- Home-screen vigilance widget (arc 3.5): RAD BALEK status at a
+             glance. Data is projected from Dart via home_widget into
+             SharedPreferences; Glance re-renders on updates. The system
+             delivers APPWIDGET_UPDATE, so exported stays false. -->
+        <receiver
+            android:name=".RbWidgetReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/rb_widget_info" />
+        </receiver>
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_stat_rb" />
