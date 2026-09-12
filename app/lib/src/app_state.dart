@@ -21,7 +21,7 @@ class AppState extends ChangeNotifier {
   final Api api;
   final bool autoRefresh;
 
-  static const appVersion = '1.3.0'; // keep in sync with pubspec version
+  static const appVersion = '1.4.0'; // keep in sync with pubspec version
 
   String lang = 'fr';
   bool dark = false;
