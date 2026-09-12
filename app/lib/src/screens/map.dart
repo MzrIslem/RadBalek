@@ -418,6 +418,60 @@ class _MapScreenState extends State<MapScreen> {
     final fireDots = _sceneFires;
     final quakeDots = _sceneQuakes;
     final badges = _sceneBadges;
+    // Reports layer ('rep'): one pin per wilaya that has citizen reports —
+    // category icon of the newest + a count chip. Pins are IgnorePointer like
+    // every other marker; taps dispatch via MapOptions.onTap (same as fires).
+    final repGroups = <int, List<CitizenReport>>{};
+    if (_layer == 'rep') {
+      for (final r in st.reports) {
+        if (r.wilaya != null) repGroups.putIfAbsent(r.wilaya!, () => []).add(r);
+      }
+    }
+    final reportMarkers = <Marker>[
+      if (_layer == 'rep')
+        for (final s in shapes)
+          if (!s.gb && repGroups.containsKey(s.code))
+            Marker(
+              point: s.centroid,
+              width: 38,
+              height: 38,
+              child: IgnorePointer(
+                child: Stack(clipBehavior: Clip.none, children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: cs.surface.withValues(alpha: .94),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: cs.outlineVariant, width: 1.5),
+                    ),
+                    child: Icon(
+                      categoryIcons[repGroups[s.code]!.first.category] ??
+                          Icons.campaign_outlined,
+                      size: 16,
+                      color: cs.primary,
+                    ),
+                  ),
+                  PositionedDirectional(
+                    top: -2,
+                    end: -2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: cs.primary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${repGroups[s.code]!.length}',
+                        style: const TextStyle(
+                            fontSize: 8.5, fontWeight: FontWeight.w800, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+    ];
 
     // Open the map focused on the user's wilaya (their GPS wilaya, else first
     // subscribed) instead of the whole country.
@@ -455,6 +509,16 @@ class _MapScreenState extends State<MapScreen> {
                 }
               },
               onTap: (_, latlng) {
+                // Reports layer: nearest pin wilaya wins first — the same
+                // small-target priority the fire/quake dots get.
+                if (_layer == 'rep') {
+                  final rc = _nearestReportWilaya(latlng, shapes, repGroups.keys.toSet());
+                  if (rc != null) {
+                    setState(() => _selected = rc);
+                    showWilayaReportsSheet(context, st, rc);
+                    return;
+                  }
+                }
                 // Tap a fire/quake dot first (small target); else the wilaya.
                 final inc = _nearestIncident(latlng, snap);
                 if (inc != null) {
@@ -501,6 +565,7 @@ class _MapScreenState extends State<MapScreen> {
               CircleLayer(circles: fireDots),
               CircleLayer(circles: quakeDots),
               MarkerLayer(markers: badges),
+              if (_layer == 'rep') MarkerLayer(markers: reportMarkers),
               // Wilaya labels appear once zoomed in enough to read them
               // (cached — only the visibility toggles with zoom).
               if (_zoom >= 6.0) MarkerLayer(markers: _sceneLabels),
@@ -536,6 +601,7 @@ class _MapScreenState extends State<MapScreen> {
             ('fire', '🔥 ${S.t(lang, 'rt_fire')}'),
             ('quake', '🌋 ${S.t(lang, 'rt_quake')}'),
             ('t', '🌡️ ${S.t(lang, 'rt_heat')}'),
+            ('rep', '📣 ${S.t(lang, 'rt_rep')}'),
           ])
             ChoiceChip(
               label: Text(label, style: const TextStyle(fontSize: 12)),
@@ -598,6 +664,11 @@ class _MapScreenState extends State<MapScreen> {
                   S.t(lang, 'lg_sat'),
                   round: true,
                 ),
+              ]
+            : _layer == 'rep'
+            ? [
+                Text(S.t(lang, 'rpt_legend'),
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
               ]
             : (_bucketLabels.containsKey(_layer)
                   ? [
@@ -673,6 +744,25 @@ class _MapScreenState extends State<MapScreen> {
       if (d < bestD) {
         bestD = d;
         best = i;
+      }
+    }
+    return best;
+  }
+
+  /// Nearest wilaya WITH citizen reports to the tap, within a small radius —
+  /// the 'rep' layer's hit test. Pins stay IgnorePointer like every other
+  /// marker; dispatch rides MapOptions.onTap, same as fires/quakes.
+  int? _nearestReportWilaya(LatLng p, List<_WilayaShape> shapes, Set<int> withReports) {
+    if (withReports.isEmpty) return null;
+    int? best;
+    double bestD = 0.22 * 0.22; // centroid pins: slightly wider than dots
+    for (final s in shapes) {
+      if (s.gb || !withReports.contains(s.code)) continue;
+      final d = (s.centroid.latitude - p.latitude) * (s.centroid.latitude - p.latitude) +
+          (s.centroid.longitude - p.longitude) * (s.centroid.longitude - p.longitude);
+      if (d < bestD) {
+        bestD = d;
+        best = s.code;
       }
     }
     return best;

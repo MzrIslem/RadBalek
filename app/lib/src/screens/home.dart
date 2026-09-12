@@ -129,6 +129,13 @@ class HomeScreen extends StatelessWidget {
               subtitle: S.t(lang, 'tile_map_sub'),
               trailing: _regionDots(st, snap),
               onTap: () => goTo(1)),
+          _tile(context,
+              width: tileW,
+              icon: Icons.timeline_outlined,
+              title: S.t(lang, 'timeline'),
+              subtitle: S.t(lang, 'tile_timeline_sub'),
+              count: '${st.timeline.length}',
+              onTap: () => _open(context, const TimelineScreen())),
         ];
 
         return ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 24), children: [
@@ -153,17 +160,14 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(height: 12),
           // 2 — Emergency hotkeys + "I'm safe".
           _sos(context, st, safeProminent: alertActive),
-          // 2b — Fire danger (Météo-des-Forêts style): FWI on the EFFIS scale,
-          // today + 2 days ahead. Only shown when it has something to say —
-          // burnable zone AND at least "high" in the 3-day window. Desert
-          // wilayas never show it (FWI saturates there with nothing to burn).
+          // 2b — Unified all-hazard 3-day outlook (fire, rain, wind,
+          // visibility, heat + METAR now-cast): one honest card, always
+          // rendered when any data exists. A quiet day shows green.
           ...(() {
-            final card = _fireDanger(context, st);
-            return card == null ? const <Widget>[] : [const SizedBox(height: 12), card];
-          })(),
-          ...(() {
-            final card = _todayRain(context, st);
-            return card == null ? const <Widget>[] : [const SizedBox(height: 12), card];
+            final card = _outlook(context, st);
+            return card == null
+                ? const <Widget>[]
+                : [const SizedBox(height: 12), card];
           })(),
           const SizedBox(height: 22),
           // 3 — Big tile access buttons.
@@ -515,199 +519,239 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// Fire-danger outlook for MY wilaya — the Canadian FWI on the published
-  /// EFFIS class scale, today / J+1 / J+2 (the Météo-des-Forêts framing).
-  /// Returns null only when there is no wilaya selected or no FWI data at all.
-  /// Quiet windows still render — green is information too.
-  Widget? _fireDanger(BuildContext context, AppState st) {
+  /// Unified all-hazard 3-day outlook — fire weather (FWI on the EFFIS class
+  /// scale), rain + storms + wind + visibility, a 48h heat footer and a live
+  /// METAR now-cast, in one honest card. Quiet windows still render: green is
+  /// information too. Returns null only with no wilaya selected or no data at all.
+  Widget? _outlook(BuildContext context, AppState st) {
     final lang = st.lang;
     final code = st.hereWilaya ?? (st.myWilayas.isNotEmpty ? st.myWilayas.first : null);
     if (code == null) return null;
-    final fire = st.weather[code]?['fire'] as Map?;
-    if (fire == null) return null;
-    final desert = fire['fuel'] == 'desert';
-    final days = [
-      (S.t(lang, 'today'), fire['fwi'], fire['class']),
-      (S.t(lang, 'fwi_d1'), (fire['d1'] as Map?)?['fwi'], (fire['d1'] as Map?)?['class']),
-      (S.t(lang, 'fwi_d2'), (fire['d2'] as Map?)?['fwi'], (fire['d2'] as Map?)?['class']),
-    ];
-    const rank = ['low', 'moderate', 'high', 'veryHigh', 'extreme', 'veryExtreme'];
-    int worst = -1;
-    for (final d in days) {
-      final i = rank.indexOf((d.$3 as String?) ?? '');
-      if (i > worst) worst = i;
-    }
-    if (worst < 0) return null; // no class data at all — nothing to render
-    // EFFIS class → the app's vigilance palette (label carries the nuance).
-    Color bg(String? c) => switch (c) {
-          'veryHigh' || 'extreme' || 'veryExtreme' => vigilance('red', st.dark).container,
-          'high' => vigilance('orange', st.dark).container,
-          'moderate' => vigilance('yellow', st.dark).container,
-          _ => vigilance('green', st.dark).container,
-        };
-    Color fg(String? c) => switch (c) {
-          'veryHigh' || 'extreme' || 'veryExtreme' => vigilance('red', st.dark).onContainer,
-          'high' => vigilance('orange', st.dark).onContainer,
-          'moderate' => vigilance('yellow', st.dark).onContainer,
-          _ => vigilance('green', st.dark).onContainer,
-        };
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(20)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const Text('🔥', style: TextStyle(fontSize: 18)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text('${S.t(lang, 'fwi_title')} — ${st.wilayaName(code)}',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
-          ),
-        ]),
-        const SizedBox(height: 10),
-        Row(children: [
-          for (final (label, fwi, cls) in days) ...[
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                decoration: BoxDecoration(color: bg(cls as String?), borderRadius: BorderRadius.circular(12)),
-                child: Column(children: [
-                  Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 10.5, color: fg(cls).withValues(alpha: .85))),
-                  const SizedBox(height: 2),
-                  Text(cls == null ? '—' : S.t(lang, 'fwi_$cls'),
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: fg(cls))),
-                  if (fwi != null)
-                    Text('FWI ${(fwi as num).round()}',
-                        style: TextStyle(fontSize: 10, color: fg(cls).withValues(alpha: .8))),
-                ]),
-              ),
-            ),
-            if (label != days.last.$1) const SizedBox(width: 8),
-          ],
-        ]),
-        if (desert)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Row(children: [
-              Icon(Icons.info_outline, size: 13, color: cs.onSurfaceVariant),
-              const SizedBox(width: 6),
-              Expanded(
-                  child: Text(S.t(lang, 'fwi_desert'),
-                      style: TextStyle(fontSize: 10.5, color: cs.onSurfaceVariant))),
-            ]),
-          ),
-        const SizedBox(height: 8),
-        Text(S.t(lang, 'fwi_scale'),
-            style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
-      ]),
-    );
-  }
-
-  /// Today's weather signature (arc pluie, v1.3.0): hourly-derived rain
-  /// probability / gusts / visibility / storm potential + live METAR
-  /// now-cast. Same discipline as _fireDanger — null when nothing notable,
-  /// so quiet days stay quiet (green-noise rule: a permanent yellow card
-  /// erodes trust faster than a rare orange one).
-  Widget? _todayRain(BuildContext context, AppState st) {
-    final lang = st.lang;
-    final code = st.hereWilaya ?? (st.myWilayas.isNotEmpty ? st.myWilayas.first : null);
-    if (code == null) return null;
-    final today = (st.weather[code]?['r'] as Map?)?['today'] as Map?;
+    final w = st.weather[code] as Map?;
+    final fire = w?['fire'] as Map?;
+    final f = w?['f'] as Map?;
+    final r = w?['r'] as Map?;
     final m = st.metar[code];
-    // METAR entries carry FLAT boolean flags (rain/ts/fog/dust directly on
-    // the airport object) — pinned against the live /v1/metar.json shape.
     final mRain = m?['rain'] == true;
     final mTs = m?['ts'] == true;
     final mFog = m?['fog'] == true;
     final mDust = m?['dust'] == true;
-    final pp = today?['pp'] as num?;
-    final gust = today?['gust'] as num?;
-    final vis = today?['vis'] as num?;
-    final cape = today?['cape'] as num?;
-    // An airport actually reporting rain / thunder / fog NOW always shows.
+    // Dust is deliberately NOT in metarNow: a dust-only METAR would pop this
+    // card open on any hazy Sahara day (noise, not warning). Real sandstorm
+    // risk reaches the user through ONM vigilance alerts; and when the card
+    // IS open (rain/storm/fog), the METAR line below still names dust.
     final metarNow = mRain || mTs || mFog;
-    if (today == null && !metarNow) return null;
-    final notable = (pp ?? 0) >= 40 ||
-        (gust ?? 0) >= 50 ||
-        (cape ?? 0) >= 800 ||
-        (vis != null && vis < 2) ||
-        metarNow;
-    if (!notable) return null; // pp 30% + breeze = silence
-    Color bg(int level) => switch (level) {
-          2 => vigilance('red', st.dark).container,
-          1 => vigilance('orange', st.dark).container,
-          _ => vigilance('green', st.dark).container,
-        };
-    Color fg(int level) => switch (level) {
-          2 => vigilance('red', st.dark).onContainer,
-          1 => vigilance('orange', st.dark).onContainer,
-          _ => vigilance('green', st.dark).onContainer,
-        };
-    final cells = <(String, String, int)>[
-      if (pp != null)
-        (S.t(lang, 'r_pp'), '$pp%', pp >= 70 ? 2 : (pp >= 40 ? 1 : 0)),
-      if (gust != null)
-        (S.t(lang, 'r_gust'), '${gust.round()} km/h', gust >= 80 ? 2 : (gust >= 50 ? 1 : 0)),
-      if (cape != null)
-        (S.t(lang, 'r_cape'), '${cape.round()}', cape >= 1500 ? 2 : (cape >= 800 ? 1 : 0)),
-      if (vis != null)
-        (S.t(lang, 'r_vis'), '$vis km', vis < 1 ? 2 : (vis < 2 ? 1 : 0)),
-    ];
+    // FWI saturates in the Sahara with nothing to burn — ingest sends `fuel`
+    // precisely so the app can drop the fire reading there (weather.js: it
+    // would cry "très extrême" wolf over bare sand).
+    final desert = fire?['fuel'] == 'desert';
+    final hasFire = !desert &&
+        (fire?['class'] != null ||
+            (fire?['d1'] as Map?)?['class'] != null ||
+            (fire?['d2'] as Map?)?['class'] != null);
+    final hasRain = (r?['today'] ?? r?['d1'] ?? r?['d2']) != null;
+    if (!hasFire && !hasRain && !metarNow) return null;
+
+    String vigName(String cls) =>
+        cls == 'veryHigh' || cls == 'extreme' || cls == 'veryExtreme'
+            ? 'red'
+            : cls == 'high'
+                ? 'orange'
+                : cls == 'moderate'
+                    ? 'yellow'
+                    : 'green';
+    Color fireBg(String cls) => vigilance(vigName(cls), st.dark).container;
+    Color fireFg(String cls) => vigilance(vigName(cls), st.dark).onContainer;
+    int fireEdge(String cls) =>
+        cls == 'veryHigh' || cls == 'extreme' || cls == 'veryExtreme'
+            ? 2
+            : cls == 'high'
+                ? 1
+                : 0;
+    Color lvlBg(int l) =>
+        vigilance(l == 2 ? 'red' : l == 1 ? 'orange' : 'green', st.dark).container;
+    Color lvlFg(int l) =>
+        vigilance(l == 2 ? 'red' : l == 1 ? 'orange' : 'green', st.dark).onContainer;
+    Widget chip(String e, String v, Color bg, Color fg) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+          decoration: BoxDecoration(
+              color: bg, borderRadius: BorderRadius.circular(8)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(e, style: const TextStyle(fontSize: 11)),
+              const SizedBox(width: 3),
+              Text(v,
+                  style: TextStyle(
+                      fontSize: 10.5, fontWeight: FontWeight.w800, color: fg)),
+            ],
+          ),
+        );
+    Widget dayRow(String label, num? fwi, String? cls, Map? rd) {
+      final chips = <(String, String, Color, Color, int)>[];
+      if (cls != null && !desert) {
+        final t = S.t(lang, 'fwi_$cls');
+        chips.add((
+          '🔥',
+          fwi == null ? t : '$t ${fwi.round()}',
+          fireBg(cls),
+          fireFg(cls),
+          fireEdge(cls)
+        ));
+      }
+      final pp = rd?['pp'] as num?;
+      final cape = rd?['cape'] as num?;
+      final gust = rd?['gust'] as num?;
+      final vis = rd?['vis'] as num?;
+      final capeLvl = cape == null ? 0 : (cape >= 1500 ? 2 : cape >= 800 ? 1 : 0);
+      final ppLvl = pp == null ? 0 : (pp >= 70 ? 2 : pp >= 40 ? 1 : 0);
+      final gustLvl = gust == null ? 0 : (gust >= 80 ? 2 : gust >= 50 ? 1 : 0);
+      final visLvl = vis == null ? 0 : (vis < 1 ? 2 : vis < 2 ? 1 : 0);
+      if (pp != null) {
+        final lvl = ppLvl > capeLvl ? ppLvl : capeLvl;
+        chips.add((capeLvl >= 1 ? '⛈️' : '🌧️', '$pp%', lvlBg(lvl), lvlFg(lvl), lvl));
+      } else if (capeLvl >= 1) {
+        chips.add((
+          '⛈️',
+          S.t(lang, 'r_cape'),
+          lvlBg(capeLvl),
+          lvlFg(capeLvl),
+          capeLvl
+        ));
+      }
+      if (gust != null) {
+        chips.add(
+            ('💨', '${gust.round()} km/h', lvlBg(gustLvl), lvlFg(gustLvl), gustLvl));
+      }
+      if (vis != null) {
+        chips.add(('🏜️', '$vis km', lvlBg(visLvl), lvlFg(visLvl), visLvl));
+      }
+      var edge = 0;
+      for (final (_, _, _, _, l) in chips) {
+        if (l > edge) edge = l;
+      }
+      return Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                    color: lvlBg(edge),
+                    borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 62,
+                child: Text(label,
+                    style: const TextStyle(
+                        fontSize: 10.5, fontWeight: FontWeight.w700),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: chips.isEmpty
+                    ? Text('—',
+                        style: TextStyle(
+                            fontSize: 11, color: cs.onSurfaceVariant))
+                    : Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: [
+                          for (final (e, v, bg, fg, _) in chips)
+                            chip(e, v, bg, fg),
+                        ],
+                      ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final trend = f?['trend'] ?? 'flat';
+    final arrow = trend == 'up' ? '↑' : trend == 'down' ? '↓' : '→';
     final nowWords = [
       if (mRain) S.t(lang, 'r_pp'),
       if (mTs) S.t(lang, 'r_cape'),
       if (mFog) S.t(lang, 'r_vis'),
       if (mDust) S.t(lang, 'sandstorm'),
     ].join(' · ');
-    final cs = Theme.of(context).colorScheme;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(20)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const Text('🌦️', style: TextStyle(fontSize: 18)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text('${S.t(lang, 'rain_title')} — ${st.wilayaName(code)}',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
-          ),
-        ]),
-        if (cells.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Row(children: [
-            for (final (label, value, level) in cells) ...[
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('🧭', style: TextStyle(fontSize: 15)),
+              const SizedBox(width: 8),
               Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                  decoration: BoxDecoration(color: bg(level), borderRadius: BorderRadius.circular(12)),
-                  child: Column(children: [
-                    Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 10.5, color: fg(level).withValues(alpha: .85))),
-                    const SizedBox(height: 2),
-                    Text(value, maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: fg(level))),
-                  ]),
+                child: Text(
+                  '${S.t(lang, 'outlook_title')} — ${st.wilayaName(code)}',
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w800),
                 ),
               ),
-              if (label != cells.last.$1) const SizedBox(width: 8),
             ],
-          ]),
-        ],
-        if (nowWords.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text('${S.t(lang, 'r_metar')} ${m?['name'] ?? ''} · $nowWords',
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
           ),
-        const SizedBox(height: 8),
-        Text('Open-Meteo.com · NOAA aviationweather.gov',
-            style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
-      ]),
+          dayRow(S.t(lang, 'today'), fire?['fwi'] as num?,
+              fire?['class'] as String?, r?['today'] as Map?),
+          dayRow(
+              S.t(lang, 'fwi_d1'),
+              (fire?['d1'] as Map?)?['fwi'] as num?,
+              (fire?['d1'] as Map?)?['class'] as String?,
+              r?['d1'] as Map?),
+          dayRow(
+              S.t(lang, 'fwi_d2'),
+              (fire?['d2'] as Map?)?['fwi'] as num?,
+              (fire?['d2'] as Map?)?['class'] as String?,
+              r?['d2'] as Map?),
+          if (f?['peak48'] != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text('🥵 ${S.t(lang, 'fc48')} $arrow ${f?['peak48']}°',
+                  style: const TextStyle(
+                      fontSize: 11.5, fontWeight: FontWeight.w700)),
+            ),
+          if (desert)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+            child: Row(children: [
+              Icon(Icons.info_outline, size: 13, color: cs.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(S.t(lang, 'fwi_desert'),
+                        style: TextStyle(
+                            fontSize: 11, color: cs.onSurfaceVariant)),
+                  ),
+                ],
+              ),
+            ),
+          if (nowWords.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+            child: Text('${S.t(lang, 'r_metar')} ${m?['name'] ?? ''} · $nowWords',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+            ),
+          const SizedBox(height: 8),
+          Text('Open-Meteo.com · EFFIS · NOAA aviationweather.gov',
+              style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+        ],
+      ),
     );
   }
 

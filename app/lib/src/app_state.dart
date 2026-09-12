@@ -21,7 +21,12 @@ class AppState extends ChangeNotifier {
   final Api api;
   final bool autoRefresh;
 
-  static const appVersion = '1.4.0'; // keep in sync with pubspec version
+  /// Local 72h alert-change timeline (pref 'rb_timeline'): compact snapshot
+  /// entries recorded only when the active-alert lineup changes. Offline by
+  /// design — TimelineScreen renders this even with zero network.
+  List<Map<String, dynamic>> timeline = [];
+
+  static const appVersion = '1.5.0'; // keep in sync with pubspec version
 
   String lang = 'fr';
   bool dark = false;
@@ -230,11 +235,57 @@ class AppState extends ChangeNotifier {
         sourceStatus = 'cached';
       } catch (_) {}
     }
+    // Timeline rides the same offline-first rule: malformed or missing blob
+    // = empty timeline, never a crash.
+    final tl = p.getString('rb_timeline');
+    if (tl != null) {
+      try {
+        timeline = (jsonDecode(tl) as List).whereType<Map<String, dynamic>>().toList();
+      } catch (_) {}
+    }
     notifyListeners();
     await refresh();
     // Push-driven refresh: FCM messages and app-resume trigger updates;
     // no polling timer (battery + data).
     unawaited(_initFcm());
+  }
+
+  /// One entry per alert-lineup CHANGE, not per cron tick: 1440 identical
+  /// snapshots/day would bury 72h of real events. Signature = sorted
+  /// id|hazard|color|codes of the active alerts; unchanged lineup → skip.
+  void _recordTimeline(Snapshot snap) {
+    final alerts = snap.alerts.where((a) => a.active).toList();
+    final sig = (alerts
+            .map((a) =>
+                '${a.id}|${a.hazard}|${a.color}|${(a.wilayas.map((w) => w.code).toList()..sort()).join(",")}')
+            .toList()
+          ..sort())
+        .join(";");
+    if (timeline.isNotEmpty && timeline.last['s'] == sig) return;
+    timeline = [
+      ...timeline,
+      {
+        't': snap.generatedAt,
+        's': sig,
+        'a': [
+          for (final a in alerts)
+            {
+              'h': a.hazard,
+              'c': a.color,
+              'w': a.wilayas.map((x) => x.code).toList(),
+              'x': a.headline['fr'] ?? '',
+            }
+        ],
+      },
+    ];
+    final cutoff = DateTime.now().subtract(const Duration(hours: 72));
+    timeline = timeline.where((e) {
+      final t = DateTime.tryParse(e['t'] as String? ?? '');
+      return t != null && t.isAfter(cutoff);
+    }).toList();
+    if (timeline.length > 200) timeline = timeline.sublist(timeline.length - 200);
+    SharedPreferences.getInstance()
+        .then((p) => p.setString('rb_timeline', jsonEncode(timeline)));
   }
 
   void finishOnboarding() {
@@ -317,6 +368,7 @@ class AppState extends ChangeNotifier {
         // already exists on disk.
         if (raw.length < 400000) {
           SharedPreferences.getInstance().then((p) => p.setString('rb_cache', raw));
+          _recordTimeline(snapshot!);
         }
       } catch (_) {
         if (sourceStatus != 'cached') sourceStatus = 'offline';

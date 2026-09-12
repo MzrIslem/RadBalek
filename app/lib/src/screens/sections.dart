@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../models.dart';
+import '../regions.dart';
 import '../strings.dart';
 import '../theme.dart';
 import '../widgets/cards.dart';
+import '../widgets/sheets.dart';
 
 /// The three sections that used to scroll inside the home feed, now full
 /// pages reached from the launcher tiles. Each watches AppState so it keeps
@@ -168,6 +170,148 @@ class TerrainScreen extends StatelessWidget {
           ],
         ];
       },
+    );
+  }
+}
+
+/// Radar: local 72h alert-change timeline. Renders AppState.timeline — the
+/// change-events this device has witnessed — so it works fully offline and
+/// never claims history it didn't see (honest-data doctrine).
+class TimelineScreen extends StatefulWidget {
+  const TimelineScreen({super.key});
+
+  @override
+  State<TimelineScreen> createState() => _TimelineScreenState();
+}
+
+class _TimelineScreenState extends State<TimelineScreen> {
+  String _filter = 'all'; // all | mine | est | centre | ouest | sud
+
+  @override
+  Widget build(BuildContext context) {
+    final st = context.watch<AppState>();
+    final lang = st.lang;
+    final cs = Theme.of(context).colorScheme;
+    final myCodes = {...st.myWilayas, if (st.hereWilaya != null) st.hereWilaya!};
+    final shown = <Map<String, dynamic>>[];
+    for (final e in st.timeline.reversed) {
+      final hits = (e['a'] as List? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .where((a) {
+        final codes =
+            (a['w'] as List? ?? const []).map((x) => (x as num).toInt()).toSet();
+        switch (_filter) {
+          case 'mine':
+            return codes.any(myCodes.contains);
+          case 'est':
+          case 'centre':
+          case 'ouest':
+          case 'sud':
+            return codes.any((c) => regionMembers[_filter]!.contains(c));
+          default:
+            return true;
+        }
+      }).toList();
+      if (hits.isNotEmpty) shown.add({...e, 'a': hits});
+    }
+    return Scaffold(
+      appBar: AppBar(title: Text(S.t(lang, 'timeline'))),
+      body: shown.isEmpty
+          ? _emptyNote(context, Icons.timeline_outlined, S.t(lang, 'tl_none'))
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+              children: [
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final f in const [
+                      'all',
+                      'mine',
+                      'est',
+                      'centre',
+                      'ouest',
+                      'sud'
+                    ])
+                      ChoiceChip(
+                        selected: _filter == f,
+                        onSelected: (_) => setState(() => _filter = f),
+                        label: Text(f == 'all'
+                            ? S.t(lang, 'tl_all')
+                            : f == 'mine'
+                                ? S.t(lang, 'mywilayas')
+                                : regionName(f, lang)),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                for (final e in shown) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(2, 10, 2, 6),
+                    child: Text(
+                      stampAgo(e['t'] as String?, lang).toUpperCase(),
+                      style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: .4,
+                          color: cs.onSurface.withValues(alpha: .6)),
+                    ),
+                  ),
+                  for (final a in (e['a'] as List).cast<Map<String, dynamic>>())
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border(
+                            left: BorderSide(
+                                width: 4,
+                                color: vigilance(a['c'] as String? ?? 'yellow',
+                                        st.dark)
+                                    .solid),
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                                hazardIcons[a['h'] as String?] ??
+                                    hazardIcons['other']!,
+                                size: 17,
+                                color: cs.onSurfaceVariant),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${S.t(lang, a['h'] as String? ?? 'other')}'
+                                    ' · ${(a['w'] as List? ?? const []).join(", ")}',
+                                    style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w800),
+                                  ),
+                                  if ((a['x'] as String? ?? '').isNotEmpty)
+                                    Text(a['x'] as String,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                            fontSize: 11.5,
+                                            color: cs.onSurface
+                                                .withValues(alpha: .7))),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ],
+            ),
     );
   }
 }

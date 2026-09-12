@@ -305,8 +305,10 @@ A real **Canadian Forest Fire Weather Index (CFFWIS)** computation — cumulativ
 FFMC/DMC/DC codes with a **14-day spin-up**, producing today + J+1 + J+2. Class
 thresholds are **exact EFFIS bands** (11.2 / 21.3 / 38 / 50 / 70) — a publicly
 defensible scale. A **fuel mask** (latitude proxy: ≥34.5° forest / ≥32.5° steppe /
-<32.5° desert) suppresses the fire-risk card in the Sahara, where FWI saturates
-but there is nothing to burn. The app hides the card entirely for `fuel==desert`.
+<32.5° desert) suppresses the **fire chips** in the Sahara, where FWI saturates
+but there is nothing to burn: for `fuel==desert` the app drops the 🔥 chips and
+fire never opens the outlook card — a `fwi_desert` annotation is shown instead,
+and the card itself renders only when a real hazard (rain, live METAR) exists.
 
 ### 5.9 AI moderation (`admin.js`, `ai.js`)
 
@@ -346,9 +348,11 @@ Home (unified status card: personal "am I safe?" + national count + local
 conditions), Map (`flutter_map` + ESRI Canvas gray tiles — CARTO raster
 went key-required 2026-08, and per-customer keys can't ship in a public APK;
 layers: vigilance choropleth,
-fires, quakes, heat/wind/humidity, **FWI**, **burnt areas**; scene-cached so it
+fires, quakes, heat/wind/humidity, **FWI**, **burnt areas**, **citizen-report
+pins** (tap → wilaya sheet, one-tap community confirm); scene-cached so it
 rebuilds only when data/layer/theme changes, not per zoom tick), Sections
-(official alerts / nearby / terrain — **lazy lists**), Settings (wilayas, hazard
+(official alerts / nearby / terrain — **lazy lists**; **72h alert timeline**
+from the local change-journal, renders offline), Settings (wilayas, hazard
 toggles, **Fiabilité** reliability checklist, Android Earthquake Alerts guide,
 emergency contacts, **Texte grand**),
 Consignes (offline trilingual safety guides), Report sheet, AI chat, Feedback.

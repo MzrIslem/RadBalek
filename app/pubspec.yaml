@@ -1,7 +1,7 @@
 name: rad_balek
 description: "Rad Balek (رد بالك) — early warning for Algeria: heatwaves, wildfires, floods, road danger. Protecting people, vegetation and animals."
 publish_to: "none"
-version: 1.4.0+37
+version: 1.5.0+38
 
 environment:
   sdk: ^3.12.0

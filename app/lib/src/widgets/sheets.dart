@@ -527,3 +527,90 @@ void showReportSheet(BuildContext context, AppState st) {
     ),
   );
 }
+
+/// All citizen reports of one wilaya (map 'rep' layer tap): list with
+/// one-tap community confirm. The count the server returns is shown live;
+/// one tap = one confirm — disabled after success (no double votes),
+/// re-enabled only on failure. ≥3 upstream = 'community-confirmed'.
+void showWilayaReportsSheet(BuildContext context, AppState st, int code) {
+  final lang = st.lang;
+  final list = st.reports.where((r) => r.wilaya == code).toList();
+  if (list.isEmpty) return;
+  final counts = <String, int>{for (final r in list) r.id: r.confirms};
+  final sent = <String>{};
+
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setS) {
+        final cs = Theme.of(ctx).colorScheme;
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.6,
+          builder: (ctx, ctl) => ListView(
+            controller: ctl,
+            padding: const EdgeInsets.fromLTRB(22, 4, 22, 26),
+            children: [
+              Text(st.wilayaName(code),
+                  style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text(S.t(lang, 'rpt_legend'),
+                  style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant)),
+              const SizedBox(height: 12),
+              for (final r in list)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(categoryIcons[r.category] ?? Icons.campaign_outlined,
+                        size: 20, color: cs.onSurfaceVariant),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(
+                          '${S.t(lang, 'cat_${r.category}')} · ${stampAgo(r.at, lang)}'
+                          '${r.status == 'community-confirmed' ? ' · ${S.t(lang, 'st_ccf')}' : ''}',
+                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                        ),
+                        if (r.description.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(r.description,
+                                style: TextStyle(
+                                    fontSize: 12, height: 1.3, color: cs.onSurfaceVariant)),
+                          ),
+                      ]),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.tonalIcon(
+                      style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+                      onPressed: sent.contains(r.id)
+                          ? null
+                          : () async {
+                              setS(() => sent.add(r.id));
+                              final n = await st.confirm(r.id);
+                              if (!ctx.mounted) return;
+                              if (n == null) {
+                                setS(() => sent.remove(r.id));
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                    SnackBar(content: Text(S.t(lang, 'rep_err'))));
+                              } else {
+                                setS(() => counts[r.id] = n);
+                              }
+                            },
+                      icon: Icon(sent.contains(r.id) ? Icons.check : Icons.thumb_up_outlined,
+                          size: 16),
+                      label: Text(sent.contains(r.id)
+                          ? '${counts[r.id] ?? 0}'
+                          : S.t(lang, 'rpt_confirm')),
+                    ),
+                  ]),
+                ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+}
