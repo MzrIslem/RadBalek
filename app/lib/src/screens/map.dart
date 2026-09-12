@@ -758,7 +758,9 @@ class _MapScreenState extends State<MapScreen> {
               ]),
               const SizedBox(height: 10),
               _kv(ctx, Icons.place_outlined,
-                  '${wLabel(st, i.wilayas)}${i.commune != null ? ' · ${i.commune}' : ''}'),
+                [wLabel(st, i.wilayas), if (i.commune != null) i.commune!, if (i.place != null) i.place!]
+                    .join(' · '),
+              ),
               if (stamp.isNotEmpty) _kv(ctx, Icons.schedule, '${S.t(lang, 'detected')} · $stamp'),
               if (i.stale)
                 Padding(
@@ -988,9 +990,10 @@ class _MapScreenState extends State<MapScreen> {
               '${S.t(lang, 'fire')} — ${S.t(lang, 'ongoing')}',
               style: const TextStyle(fontSize: 13),
             ),
-            subtitle: f.commune == null
+            subtitle: (f.commune == null && f.place == null)
                 ? null
-                : Text(f.commune!, style: const TextStyle(fontSize: 12)),
+                : Text([f.commune, f.place].whereType<String>().join(' · '),
+                    style: const TextStyle(fontSize: 12)),
           ),
         if (sats.isNotEmpty)
           ListTile(

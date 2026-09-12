@@ -196,7 +196,9 @@ List<Widget> incidentCards(BuildContext context, AppState st, Snapshot snap) {
   return [
     for (final f in fires)
       card(Icons.local_fire_department_outlined, 'orange', S.t(lang, 'fire'),
-          '${wLabel(st, f.wilayas)}${f.commune != null ? ' · ${f.commune}' : ''}', chip(S.t(lang, 'ongoing'), red)),
+          [wLabel(st, f.wilayas), if (f.commune != null) f.commune!, if (f.place != null) f.place!]
+              .join(' · '),
+          chip(S.t(lang, 'ongoing'), red)),
     for (final s in sats)
       card(Icons.satellite_alt_outlined, '', S.t(lang, 'sat'),
           '${wLabel(st, s.wilayas)} · ${s.detections} ${S.t(lang, 'det')}'

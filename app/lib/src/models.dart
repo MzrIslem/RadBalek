@@ -103,6 +103,7 @@ class Incident {
   final String status;
   final List<Wilaya> wilayas;
   final String? commune;
+  final String? place; // exact named location from DGPC sitrep bullets
   final int detections;
   final double? totalFrp; // summed fire radiative power (MW) of the cluster
   final bool corroborated;
@@ -126,6 +127,7 @@ class Incident {
     required this.status,
     required this.wilayas,
     this.commune,
+    this.place,
     this.detections = 0,
     this.totalFrp,
     this.corroborated = false,
@@ -152,6 +154,7 @@ class Incident {
             .map((w) => Wilaya.fromJson(w as Map<String, dynamic>))
             .toList(),
         commune: j['commune'] as String?,
+        place: j['place'] as String?,
         detections: (j['detections'] as num?)?.toInt() ?? 0,
         totalFrp: (j['totalFrp'] as num?)?.toDouble(),
         corroborated: j['corroborated'] as bool? ?? false,

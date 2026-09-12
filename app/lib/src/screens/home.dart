@@ -517,14 +517,15 @@ class HomeScreen extends StatelessWidget {
 
   /// Fire-danger outlook for MY wilaya — the Canadian FWI on the published
   /// EFFIS class scale, today / J+1 / J+2 (the Météo-des-Forêts framing).
-  /// Returns null when there is nothing worth saying: desert fuel zone, no
-  /// data, or the whole window below "high" (green noise erodes trust).
+  /// Returns null only when there is no wilaya selected or no FWI data at all.
+  /// Quiet windows still render — green is information too.
   Widget? _fireDanger(BuildContext context, AppState st) {
     final lang = st.lang;
     final code = st.hereWilaya ?? (st.myWilayas.isNotEmpty ? st.myWilayas.first : null);
     if (code == null) return null;
     final fire = st.weather[code]?['fire'] as Map?;
-    if (fire == null || fire['fuel'] == 'desert') return null;
+    if (fire == null) return null;
+    final desert = fire['fuel'] == 'desert';
     final days = [
       (S.t(lang, 'today'), fire['fwi'], fire['class']),
       (S.t(lang, 'fwi_d1'), (fire['d1'] as Map?)?['fwi'], (fire['d1'] as Map?)?['class']),
@@ -536,7 +537,7 @@ class HomeScreen extends StatelessWidget {
       final i = rank.indexOf((d.$3 as String?) ?? '');
       if (i > worst) worst = i;
     }
-    if (worst < 2) return null; // low/moderate everywhere — say nothing
+    if (worst < 0) return null; // no class data at all — nothing to render
     // EFFIS class → the app's vigilance palette (label carries the nuance).
     Color bg(String? c) => switch (c) {
           'veryHigh' || 'extreme' || 'veryExtreme' => vigilance('red', st.dark).container,
@@ -587,6 +588,17 @@ class HomeScreen extends StatelessWidget {
             if (label != days.last.$1) const SizedBox(width: 8),
           ],
         ]),
+        if (desert)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(children: [
+              Icon(Icons.info_outline, size: 13, color: cs.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Expanded(
+                  child: Text(S.t(lang, 'fwi_desert'),
+                      style: TextStyle(fontSize: 10.5, color: cs.onSurfaceVariant))),
+            ]),
+          ),
         const SizedBox(height: 8),
         Text(S.t(lang, 'fwi_scale'),
             style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),

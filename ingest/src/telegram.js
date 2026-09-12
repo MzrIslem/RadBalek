@@ -110,7 +110,10 @@ export function parseFireSitrep(text) {
     if (line.startsWith("*")) {
       const body = line.replace(/^\*\s*/, "");
       if (!body) continue;
-      const place = (body.match(/بالمكان المسمى\s+(.+?)\s+ببلدية/) || [])[1] || null;
+      const place =
+        (body.match(/ب(?:ال)?مكان المسمى\s+(.+?)\s+ببلدية/) ||
+          body.match(/ب(?:ال)?(?:ساحة|وادي|طريق|غابة|مرتفع|جبل)\s+(.+?)\s+ببلدية/) ||
+          [])[1]?.trim() || null;
       const commune = (body.match(/ببلدية\s+([^.]+)/) || [])[1]?.trim() || null;
       const type = /حريق غابة/.test(body) ? "forest" : /أدغال|أحراش/.test(body) ? "scrub" : "vegetation";
       incidents.push({ status, type, place, commune, wilaya, textAr: body });
